@@ -1,6 +1,5 @@
 # ⚡️Lightning Generative Models
-
-Implementation of deep generative models using **[PyTorch Lightning](https://lightning.ai/)** to train and **[Weights & Biases (W&B)](https://wandb.ai/site)** to log experiments!
+Harness the capabilities of **[PyTorch Lightning](https://lightning.ai/)** and **[Weights & Biases (W&B)](https://wandb.ai/site)** to implement and train a variety of deep generative models, while seamlessly logging your experiments.
 
 ## 🌟 Models
 
@@ -11,24 +10,24 @@ Implementation of deep generative models using **[PyTorch Lightning](https://lig
     - [WGAN](models/generative/gan/wgan.py)
     - (Upcoming) [CycleGAN](models/generative/gan/cyclegan.py)
 
-- VAE
+- VAEs
     - [VAE](models/generative/vae/vae.py)
     - [VQVAE](models/generative/vae/vqvae.py)
 
-- Autoregressive models
+- Autoregressive Models
     - (Upcoming) PixelCNN
 
-- Normalizing flows
+- Normalizing Flows
     - (Upcoming) NICE (Non-linear Independent Components Estimation)
     - (Upcoming) RealNVP
     - (Upcoming) Glow
 
-- Diffusion models
+- Diffusion Models
     - (Upcoming) DDPM
     - (Upcoming) DDIM
 
 ## 📊 Evaluation Metrics
-Assess the quality and performance of generative models using:
+Assess the quality and performance of your generative models with:
 
 1. Inception Score (IS)
 2. Fréchet Inception Distance (FID)
@@ -38,26 +37,27 @@ Assess the quality and performance of generative models using:
 
 ## 🔧 Installation
 
-**macOS M1 Support**: This repository has been tested and is compatible with macOS on the M1 chip with GPU acceleration. Ensure that you have the necessary dependencies and versions installed to leverage the M1's GPU capabilities.
+**macOS M1 support**: This repository is tested and compatible with the macOS M1 with GPU acceleration.
 
 ```bash
 # Clone the repository
 $ git clone https://github.com/seungjunlee96/lightning-generative-models.git
 $ cd lightning-generative-models
 
-# Create conda environment
+# Set up a conda environment
 $ conda create -n lightning-generative-models python=3.11
 $ conda activate lightning-generative-models
 $ pip install -r environments/requirements.txt
 
-# For development
+# For contributors
 $ pre-commit install
 ```
 
 
 ## 🚀 Usage
 ### (1) Download data
-Automatic-download supported, However, Some datasets (e.g., LSUN) require manual download:
+While automatic dataset downloading is supported, some datasets (e.g., LSUN) require manual downloading:
+
 ```bash
 $ git clone https://github.com/fyu/lsun.git ./data/dataset/LSUN
 $ cd lsun
@@ -67,7 +67,7 @@ $ rm *.zip
 ```
 
 ### (2) Run `train.py`
-Run `train.py` with `config` parser to train from, for example:
+Use the `config` parser with `train.py`, for example:
 
 ```bash
 # Train GAN
@@ -92,7 +92,7 @@ python train.py --config configs/vae/vqvae_ema.json
 ```
 
 ## 🤝 Contributing
-All contributions are appreciated! Open an issue for discussions or submit a pull request directly.
+All contributions are welcome! Open an issue for discussions or submit a pull request directly.
 
 ## 📩 Contact
 For queries or feedback, email me at lsjj096@gmail.com.
