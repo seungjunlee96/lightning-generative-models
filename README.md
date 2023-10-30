@@ -60,7 +60,7 @@ While automatic dataset downloading is supported, some datasets (e.g., LSUN) req
 
 ```bash
 $ git clone https://github.com/fyu/lsun.git ./data/dataset/LSUN
-$ cd lsun
+$ cd ./data/dataset/LSUN
 $ python3 download.py
 $ for file in *.zip; do unzip "$file"; done
 $ rm *.zip
