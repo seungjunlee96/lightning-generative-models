@@ -1,6 +1,6 @@
 # ⚡️Lightning Generative Models
 
-Implementation of deep generative models using **[PyTorch Lightning](https://lightning.ai/)** to train and **[Weights & Biases (W&B)](https://wandb.ai/site)** log experiments!
+Implementation of deep generative models using **[PyTorch Lightning](https://lightning.ai/)** to train and **[Weights & Biases (W&B)](https://wandb.ai/site)** to log experiments!
 
 ## 🌟 Models
 
