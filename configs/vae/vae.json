@@ -1,0 +1,25 @@
+{
+    "model": {
+        "name": "VAE",
+        "args": {
+            "img_channels": 1,
+            "img_size": 28,
+            "latent_dim": 20,
+            "lr": 0.0001,
+            "b1": 0.9,
+            "b2": 0.999,
+            "weight_decay": 1e-5,
+            "kld_weight": 1e-2
+        }
+    },
+    "dataset": {
+        "name": "MNIST",
+        "img_size": 28,
+        "img_channels": 1,
+        "batch_size": 32,
+        "num_workers": 0,
+        "pin_memory": true,
+        "train_val_split": 0.8,
+        "download": true
+    }
+}

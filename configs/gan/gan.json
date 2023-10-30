@@ -1,0 +1,26 @@
+{
+    "model": {
+        "name": "GAN",
+        "args": {
+            "img_channels": 1,
+            "img_size": 28,
+            "latent_dim": 100,
+            "lr": 0.0001,
+            "b1": 0.5,
+            "b2": 0.999,
+            "weight_decay": 1e-5,
+            "loss_type": "non-saturating",
+            "ckpt_path": ""
+        }
+    },
+    "dataset": {
+        "name": "MNIST",
+        "img_size": 28,
+        "img_channels": 1,
+        "batch_size": 32,
+        "num_workers": 0,
+        "pin_memory": true,
+        "train_val_split": 0.8,
+        "download": true
+    }
+}

@@ -1,0 +1,13 @@
+torch
+torchvision
+torchaudio
+pytorch_lightning
+numpy
+pandas
+matplotlib
+seaborn
+pre-commit
+black
+black[jupyter]
+lmdb
+wandb

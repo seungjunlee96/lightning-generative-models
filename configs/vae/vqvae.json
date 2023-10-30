@@ -1,0 +1,32 @@
+{
+    "model": {
+        "name": "VQVAE",
+        "args": {
+            "img_channels": 3,
+            "img_size": 64,
+            "embedding_dim": 64,
+            "num_embeddings": 512,
+            "hidden_dim": 256,
+            "num_residual_layers": 2,
+            "num_residual_hiddens": 256,
+            "commitment_cost": 0.25,
+            "use_ema": false,
+            "decay": 0.99,
+            "epsilon": 1e-5,
+            "lr": 1e-4,
+            "b1": 0.5,
+            "b2": 0.999,
+            "weight_decay": 1e-5,
+            "ckpt_path": ""
+        }
+    },
+    "dataset": {
+        "name": "LSUN",
+        "img_size": 64,
+        "img_channels": 3,
+        "batch_size": 32,
+        "num_workers": 0,
+        "pin_memory": true,
+        "train_val_split": 0.8
+    }
+}
