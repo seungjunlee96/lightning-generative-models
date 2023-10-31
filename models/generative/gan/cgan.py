@@ -59,28 +59,6 @@ class Generator(nn.Module):
         x = self.deconv(x)
         return x
 
-    def random_sample(self, batch_size: int) -> Tensor:
-        """
-        Generate random samples using the generator.
-
-        Args:
-            batch_size (int): Number of samples to generate.
-
-        Returns:
-            Tensor: Generated fake images.
-        """
-        z = torch.randn([batch_size, self.latent_dim], device=self.device)
-        c = F.one_hot(
-            torch.randint(0, self.num_classes, size=[batch_size], device=self.device),
-            num_classes=self.num_classes,
-        ).float()
-        return self(z, c)
-
-    @property
-    def device(self) -> torch.device:
-        """Get the device of the model."""
-        return next(self.parameters()).device
-
 
 class Discriminator(nn.Module):
     """
@@ -247,7 +225,7 @@ class CGAN(pl.LightningModule):
         loss_dict = self._calculate_g_loss(x, c)
         self.log("val_loss", loss_dict["g_loss"], on_epoch=True, prog_bar=True)
         if batch_idx == 0:
-            self._log_images(fig_name="Random Generation", batch_size=16)
+            self._log_images(fig_name="Random Generation")
 
     def configure_optimizers(self) -> Tuple[List[torch.optim.Optimizer], List]:
         """
@@ -326,7 +304,7 @@ class CGAN(pl.LightningModule):
         return loss_dict
 
     @torch.no_grad()
-    def _log_images(self, fig_name: str, batch_size: int) -> None:
+    def _log_images(self, fig_name: str) -> None:
         """
         Log generated images to Weights & Biases (wandb) for visualization.
 
@@ -335,10 +313,17 @@ class CGAN(pl.LightningModule):
             batch_size (int): Number of images to generate and log.
         """
         # Generate fake images
-        sample_images = self.generator.random_sample(batch_size)
-        sample_images = ((sample_images + 1.0) / 2.0) * 255.0
-        sample_images = sample_images.clamp(0, 255).byte().detach().cpu()
-        fig = make_grid(sample_images)
+        z = torch.randn([self.num_classes, self.latent_dim], device=self.device)
+        c = F.one_hot(
+            torch.arange(0, self.num_classes, device=self.device),
+            num_classes=self.num_classes,
+        ).float()
+        sample = self.generator(z, c)
+
+        # log sample images
+        sample = ((sample + 1.0) / 2.0) * 255.0
+        sample = sample.clamp(0, 255).byte().detach().cpu()
+        fig = make_grid(sample)
         self.logger.experiment.log(
             {fig_name: [wandb.Image(fig)]},
             step=self.global_step,
