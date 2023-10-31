@@ -29,7 +29,7 @@ def setup_arguments(print_args: bool = True, save_args: bool = True):
 
     # Trainer Configurations
     parser.add_argument("--max_epochs", type=int, default=1000)
-    parser.add_argument("--patience", type=int, default=10)
+    parser.add_argument("--patience", type=int, default=25)
     parser.add_argument("--ckpt_path", type=str, default=None)
 
     # Logging Configurations
@@ -39,10 +39,22 @@ def setup_arguments(print_args: bool = True, save_args: bool = True):
         default="Lightning generative models",
         help="W&B project name.",
     )
-    parser.add_argument("--experiment_name", type=str, default=EXPERIMENT_TIME)
-    parser.add_argument("--resume", action="store_true", help="Resume W&B.")
     parser.add_argument(
-        "--id", type=str, default=None, help="W&B run ID to resume from."
+        "--experiment_name",
+        type=str,
+        default=EXPERIMENT_TIME,
+        help="W&B experiment name.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume W&B.",
+    )
+    parser.add_argument(
+        "--id",
+        type=str,
+        default=None,
+        help="W&B run ID to resume from.",
     )
 
     args = parser.parse_args()
