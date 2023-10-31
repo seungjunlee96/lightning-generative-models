@@ -42,7 +42,10 @@ class Encoder(nn.Module):
             nn.ReLU(),
             nn.Conv2d(hidden_dim, hidden_dim, 3, 1, 1),
             ResidualStack(
-                hidden_dim, hidden_dim, num_residual_layers, num_residual_hiddens
+                hidden_dim,
+                hidden_dim,
+                num_residual_layers,
+                num_residual_hiddens,
             ),
             nn.Conv2d(hidden_dim, embedding_dim, 1),
         )
@@ -242,19 +245,11 @@ class VQVAE(pl.LightningModule):
 
     @torch.no_grad()
     def _log_embedding(self):
-        # Ensure WandB logging is available
-        if not hasattr(self, "logger") or not isinstance(
-            self.logger.experiment, wandb.wandb_run.Run
-        ):
-            print(
-                "Either WandB logger is not initialized or the current logger is not a WandB logger."
-            )
-            return None
-
         embedding = self.vector_quantizer.embedding.weight.cpu()
         data = pd.DataFrame(
-            {f"embedding_{i}": embedding[:, i] for i in range(embedding.size(1))}
+            {f"dim_{i}": embedding[:, i] for i in range(embedding.size(1))}
         )
         self.logger.experiment.log(
-            {"embedding": wandb.Table(data=data)}, step=self.global_step
+            {"embedding": wandb.Table(data=data)},
+            step=self.global_step,
         )
