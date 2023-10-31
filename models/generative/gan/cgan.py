@@ -179,10 +179,13 @@ class CGAN(pl.LightningModule):
         self.automatic_optimization = False
 
         self.generator = Generator(
-            img_channels=img_channels, latent_dim=latent_dim, num_classes=num_classes
+            img_channels=img_channels,
+            latent_dim=latent_dim,
+            num_classes=num_classes,
         )
         self.discriminator = Discriminator(
-            img_channels=img_channels, num_classes=num_classes
+            img_channels=img_channels,
+            num_classes=num_classes,
         )
         self.latent_dim = latent_dim
         self.num_classes = num_classes
