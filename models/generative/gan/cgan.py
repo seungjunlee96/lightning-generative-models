@@ -1,90 +1,215 @@
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
+import wandb
 from torch import Tensor, nn
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
 from torch.optim import Adam
 
-
-class ConditionalBatchNorm2d(nn.Module):
-    def __init__(self, num_features: int, num_classes: int) -> None:
-        super().__init__()
-        self.num_features = num_features
-        self.bn = nn.BatchNorm2d(num_features, affine=False)
-        self.embed = nn.Embedding(num_classes, num_features * 2)
-        self.embed.weight.data[:, :num_features].fill_(1.0)
-        self.embed.weight.data[:, num_features:].zero_()
-
-    def forward(self, x: Tensor, y: Tensor) -> Tensor:
-        out = self.bn(x)
-        gamma, beta = self.embed(y).chunk(2, 1)
-        gamma = gamma.view(-1, self.num_features, 1, 1)
-        beta = beta.view(-1, self.num_features, 1, 1)
-        return gamma * out + beta
+from utils.visualization import make_grid
 
 
 class Generator(nn.Module):
-    def __init__(self, latent_dim: int, num_classes: int) -> None:
+    """
+    Generator for the Conditional Generative Adversarial Network (CGAN).
+
+    This model generates fake images given a noise vector `z` and class labels `c`.
+    """
+
+    def __init__(self, img_channels: int, latent_dim: int, num_classes: int) -> None:
+        """
+        Args:
+            img_channels (int): Number of channels in the output image.
+            latent_dim (int): Dimensionality of the latent noise vector.
+            num_classes (int): Number of classes for conditional generation.
+        """
         super().__init__()
-        self.fc = nn.Linear(latent_dim + num_classes, 7 * 7 * 256)
-        self.deconv1 = nn.ConvTranspose2d(
-            256, 128, kernel_size=3, stride=2, padding=1, output_padding=1
+        self.latent_dim = latent_dim
+        self.num_classes = num_classes
+
+        # Initial transformation: Transforms the concatenated noise and class label into a feature map
+        self.initial = nn.Sequential(
+            nn.Linear(latent_dim + num_classes, 7 * 7 * 256), nn.LeakyReLU(0.2)
         )
-        self.deconv2 = nn.ConvTranspose2d(
-            128, 1, kernel_size=3, stride=2, padding=1, output_padding=1
+
+        # Deconvolution layers: Upsample the feature map to produce the fake image
+        self.deconv = nn.Sequential(
+            nn.Unflatten(1, (256, 7, 7)),
+            nn.ConvTranspose2d(256, 128, 3, 2, 1, 1),
+            nn.LeakyReLU(0.2),
+            nn.ConvTranspose2d(128, img_channels, 3, 2, 1, 1),
+            nn.Tanh(),
         )
 
     def forward(self, z: Tensor, c: Tensor) -> Tensor:
+        """
+        Forward pass for the generator.
+
+        Args:
+            z (Tensor): Latent noise vector of shape (batch_size, latent_dim).
+            c (Tensor): One-hot encoded class labels of shape (batch_size, num_classes).
+
+        Returns:
+            Tensor: Generated fake images.
+        """
         x = torch.cat([z, c], dim=1)
-        x = self.fc(x)
-        x = F.leaky_relu(x, 0.2)
-        x = x.view(x.size(0), 256, 7, 7)
-        x = F.leaky_relu(self.deconv1(x), 0.2)
-        x = torch.sigmoid(self.deconv2(x))
+        x = self.initial(x)
+        x = self.deconv(x)
         return x
+
+    def random_sample(self, batch_size: int) -> Tensor:
+        """
+        Generate random samples using the generator.
+
+        Args:
+            batch_size (int): Number of samples to generate.
+
+        Returns:
+            Tensor: Generated fake images.
+        """
+        z = torch.randn([batch_size, self.latent_dim], device=self.device)
+        c = F.one_hot(
+            torch.randint(0, self.num_classes, size=[batch_size], device=self.device),
+            num_classes=self.num_classes,
+        ).float()
+        return self(z, c)
+
+    @property
+    def device(self) -> torch.device:
+        """Get the device of the model."""
+        return next(self.parameters()).device
 
 
 class Discriminator(nn.Module):
-    def __init__(self, num_channels: int, num_classes: int) -> None:
+    """
+    Discriminator for the Conditional Generative Adversarial Network (CGAN).
+
+    This model differentiates between real and fake images given the image and class label.
+    """
+
+    def __init__(
+        self,
+        img_channels: int,
+        num_classes: int,
+        dropout: float = 0.5,
+    ) -> None:
+        """
+        Args:
+            img_channels (int): Number of channels in the input image.
+            num_classes (int): Number of classes for conditional discrimination.
+        """
         super().__init__()
-        self.conv1 = nn.Conv2d(
-            num_channels + num_classes, 64, kernel_size=3, stride=2, padding=1
+
+        # Convolution layers: Process the concatenated image and class label to produce a decision
+        self.model = nn.Sequential(
+            nn.Conv2d(img_channels + num_classes, 64, 3, 2, 1),  # [64, 14, 14]
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(64, 128, 3, 2, 1),  # [128, 7, 7]
+            nn.LeakyReLU(0.2),
+            nn.Flatten(),  # [128 * 7, 7]
+            nn.Dropout(dropout),
+            nn.Linear(128 * 7 * 7, 1),
         )
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)
-        self.fc = nn.Linear(128 * 7 * 7, 1)
 
     def forward(self, x: Tensor, c: Tensor) -> Tensor:
-        c = c.view(-1, c.size(1), 1, 1)
-        c = c.expand(x.size(0), c.size(1), x.size(2), x.size(3))
-        x = torch.cat([x, c], dim=1)
-        x = F.leaky_relu(self.conv1(x), 0.2)
-        x = F.leaky_relu(self.conv2(x), 0.2)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        """
+        Forward pass for the discriminator.
+
+        Args:
+            x (Tensor): Real or fake images.
+            c (Tensor): One-hot encoded class labels.
+
+        Returns:
+            Tensor: Decision scores for the images. Higher values indicate "real", lower values indicate "fake".
+        """
+        c = self._expand_label(c, x.size())
+        x = self.model(torch.cat([x, c], dim=1))
         return x
 
+    def _expand_label(self, c: Tensor, size: torch.Size) -> Tensor:
+        """
+        Expand label tensor to match the size of the input image tensor.
 
-class ConditionalGAN(pl.LightningModule):
+        Args:
+            c (Tensor): One-hot encoded class labels.
+            size (torch.Size): Size of the input image tensor.
+
+        Returns:
+            Tensor: Expanded class labels.
+        """
+        c = c.view(-1, c.size(1), 1, 1)
+        return c.expand(size[0], c.size(1), size[2], size[3])
+
+
+class CGAN(pl.LightningModule):
+    """
+    Conditional Generative Adversarial Network (CGAN) using PyTorch Lightning.
+
+    This model consists of a generator and a discriminator that are trained alternately.
+    """
+
     def __init__(
-        self, num_channels: int = 1, num_classes: int = 10, latent_dim: int = 128
+        self,
+        num_classes: int = 10,
+        latent_dim: int = 100,
+        img_channels: int = 1,
+        img_size: int = 28,
+        lr: float = 1e-4,
+        b1: float = 0.5,
+        b2: float = 0.999,
+        weight_decay: float = 1e-5,
+        ckpt_path: str = "",
     ) -> None:
+        """
+        Args:
+            num_classes (int): Number of classes for conditional GAN.
+            latent_dim (int): Dimensionality of the latent noise vector.
+            img_channels (int): Number of channels in the image.
+            img_size (int): Size of the image (assumed square).
+            lr (float): Learning rate for the Adam optimizers.
+            b1 (float): Beta1 coefficient for the Adam optimizers.
+            b2 (float): Beta2 coefficient for the Adam optimizers.
+            weight_decay (float): Weight decay for the Adam optimizers.
+            ckpt_path (str): Path to save the model checkpoints.
+        """
         super().__init__()
+        self.save_hyperparameters()
         self.automatic_optimization = False
-        self.generator = Generator(latent_dim=latent_dim, num_classes=num_classes)
+
+        self.generator = Generator(
+            img_channels=img_channels, latent_dim=latent_dim, num_classes=num_classes
+        )
         self.discriminator = Discriminator(
-            num_channels=num_channels, num_classes=num_classes
+            img_channels=img_channels, num_classes=num_classes
         )
         self.latent_dim = latent_dim
         self.num_classes = num_classes
 
     def forward(self, z: Tensor, c: Tensor) -> Tensor:
+        """
+        Forward pass using the generator.
+
+        Args:
+            z (Tensor): Latent noise vector.
+            c (Tensor): One-hot encoded class labels.
+
+        Returns:
+            Tensor: Generated fake images.
+        """
         return self.generator(z, c)
 
-    def training_step(
-        self, batch: Tuple[Tensor, Tensor], batch_idx: int
-    ) -> Dict[str, Tensor]:
+    def training_step(self, batch: Tuple[Tensor, Tensor]) -> Dict[str, Tensor]:
+        """
+        Training step for the CGAN. This includes one step of training the discriminator and one step of training the generator.
+
+        Args:
+            batch (Tuple[Tensor, Tensor]): Input data batch. The first tensor is the real images, and the second tensor is the class labels.
+
+        Returns:
+            Dict[str, Tensor]: Dictionary of loss values and other relevant metrics.
+        """
         x, c = batch
         c = F.one_hot(c, num_classes=self.num_classes).float()
         d_optimizer, g_optimizer = self.optimizers()
@@ -106,13 +231,53 @@ class ConditionalGAN(pl.LightningModule):
         self.log_dict(loss_dict, on_step=True, prog_bar=True)
         return loss_dict
 
-    def configure_optimizers(self):
-        d_optim = Adam(self.discriminator.parameters(), lr=0.0003, betas=(0.5, 0.999))
-        g_optim = Adam(self.generator.parameters(), lr=0.0003, betas=(0.5, 0.999))
+    def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
+        """
+        Validation step for the CGAN. This involves generating images and computing the generator loss.
 
-        return [d_optim, g_optim]
+        Args:
+            batch (Tuple[Tensor, Tensor]): Input data batch for validation.
+            batch_idx (int): Batch index.
+        """
+        x, c = batch
+        c = F.one_hot(c, num_classes=self.num_classes).float()
+        loss_dict = self._calculate_g_loss(x, c)
+        self.log("val_loss", loss_dict["g_loss"], on_epoch=True, prog_bar=True)
+        if batch_idx == 0:
+            self._log_images(fig_name="Random Generation", batch_size=16)
+
+    def configure_optimizers(self) -> Tuple[List[torch.optim.Optimizer], List]:
+        """
+        Configure the optimizers for the generator and the discriminator.
+
+        Returns:
+            Tuple[List[torch.optim.Optimizer], List]: A tuple containing the list of optimizers and an empty list (since we don't use learning rate schedulers here).
+        """
+        d_optim = Adam(
+            self.discriminator.parameters(),
+            lr=self.hparams.lr,
+            betas=(self.hparams.b1, self.hparams.b2),
+            weight_decay=self.hparams.weight_decay,
+        )
+        g_optim = Adam(
+            self.generator.parameters(),
+            lr=self.hparams.lr,
+            betas=(self.hparams.b1, self.hparams.b2),
+            weight_decay=self.hparams.weight_decay,
+        )
+        return [d_optim, g_optim], []
 
     def _calculate_d_loss(self, x: Tensor, c: Tensor) -> Tensor:
+        """
+        Calculate the discriminator's loss.
+
+        Args:
+            x (Tensor): Real images.
+            c (Tensor): One-hot encoded class labels.
+
+        Returns:
+            Dict[str, Tensor]: Dictionary of loss values and other relevant metrics.
+        """
         logits_real = self.discriminator(x, c)
         d_loss_real = bce_with_logits(logits_real, torch.ones_like(logits_real))
 
@@ -134,8 +299,18 @@ class ConditionalGAN(pl.LightningModule):
         return loss_dict
 
     def _calculate_g_loss(self, x: Tensor, c: Tensor) -> Tensor:
+        """
+        Calculate the generator's loss.
+
+        Args:
+            x (Tensor): Real images (not used in the generator loss but provided for consistency).
+            c (Tensor): One-hot encoded class labels.
+
+        Returns:
+            Dict[str, Tensor]: Dictionary of loss values and other relevant metrics.
+        """
         # Generate fake images
-        z = torch.randn(x.size(0), self.latent_dim).to(self.device)
+        z = torch.randn(x.size(0), self.latent_dim, device=self.device)
         x_hat = self.generator(z, c)
 
         logits_fake = self.discriminator(x_hat, c)
@@ -146,3 +321,22 @@ class ConditionalGAN(pl.LightningModule):
             "logits_fake": logits_fake.mean(),
         }
         return loss_dict
+
+    @torch.no_grad()
+    def _log_images(self, fig_name: str, batch_size: int) -> None:
+        """
+        Log generated images to Weights & Biases (wandb) for visualization.
+
+        Args:
+            fig_name (str): Name of the figure to be displayed in wandb.
+            batch_size (int): Number of images to generate and log.
+        """
+        # Generate fake images
+        sample_images = self.generator.random_sample(batch_size)
+        sample_images = ((sample_images + 1.0) / 2.0) * 255.0
+        sample_images = sample_images.clamp(0, 255).byte().detach().cpu()
+        fig = make_grid(sample_images)
+        self.logger.experiment.log(
+            {fig_name: [wandb.Image(fig)]},
+            step=self.global_step,
+        )
