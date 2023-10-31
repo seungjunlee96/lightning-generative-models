@@ -5,6 +5,7 @@ Harness the capabilities of **[PyTorch Lightning](https://lightning.ai/)** and *
 
 - GANs
     - [GAN](models/generative/gan/gan.py)
+    - [CGAN](models/generative/gan/cgan.py)
     - [DCGAN](models/generative/gan/dcgan.py)
     - [LSGAN](models/generative/gan/lsgan.py)
     - [WGAN](models/generative/gan/wgan.py)
@@ -72,6 +73,9 @@ Use the `config` parser with `train.py`, for example:
 ```bash
 # Train GAN
 python train.py --config configs/gan/gan.json
+
+# Train CGAN
+python train.py --config configs/gan/cgan.json
 
 # Train DCGAN
 python train.py --config configs/gan/dcgan.json
