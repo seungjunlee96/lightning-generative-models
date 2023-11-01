@@ -1,4 +1,6 @@
 # ⚡️Lightning Generative Models
+![generative_models](assets/generative_models.png)
+
 Harness the capabilities of **[PyTorch Lightning](https://lightning.ai/)** and **[Weights & Biases (W&B)](https://wandb.ai/site)** to implement and train a variety of deep generative models, while seamlessly logging your experiments.
 
 ## 🌟 Models
