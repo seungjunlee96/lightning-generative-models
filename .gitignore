@@ -24,7 +24,6 @@ MNIST/
 *.xls
 *.jpg
 *.jpeg
-*.png
 *.gif
 *.bmp
 *.rle
