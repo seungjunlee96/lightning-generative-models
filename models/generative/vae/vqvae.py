@@ -10,8 +10,8 @@ from torch import Tensor, nn
 from torch.optim import Adam
 from torchvision.utils import make_grid
 
-from models.layers.residual import ResidualStack
-from models.layers.vector_quantizer import VectorQuantizer, VectorQuantizerEMA
+from models.modules.residual import ResidualStack
+from models.modules.vector_quantizer import VectorQuantizer, VectorQuantizerEMA
 
 
 class Encoder(nn.Module):
