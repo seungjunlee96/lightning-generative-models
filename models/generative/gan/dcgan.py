@@ -197,7 +197,7 @@ class DCGAN(pl.LightningModule):
         logits_fake = self.discriminator(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
-        d_loss = d_loss_real + d_loss_fake
+        d_loss = (d_loss_real + d_loss_fake) / 2
 
         loss_dict = {
             "d_loss": d_loss,

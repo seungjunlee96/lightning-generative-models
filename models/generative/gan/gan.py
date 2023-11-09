@@ -1,5 +1,5 @@
 import os
-from typing import List, Tuple
+from typing import Tuple
 
 import numpy as np
 import pytorch_lightning as pl
@@ -38,7 +38,9 @@ class Generator(nn.Module):
             nn.LeakyReLU(0.2),
             nn.Linear(256, 512),
             nn.LeakyReLU(0.2),
-            nn.Linear(512, np.prod(self.img_shape)),
+            nn.Linear(512, 1024),
+            nn.LeakyReLU(0.2),
+            nn.Linear(1024, np.prod(self.img_shape)),
             nn.LeakyReLU(0.2),
             nn.Tanh(),
         )
@@ -187,7 +189,7 @@ class GAN(pl.LightningModule):
         logits_fake = self.discriminator(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
-        d_loss = d_loss_real + d_loss_fake
+        d_loss = (d_loss_real + d_loss_fake) / 2
 
         loss_dict = {
             "d_loss": d_loss,
