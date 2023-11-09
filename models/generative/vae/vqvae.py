@@ -1,5 +1,5 @@
 import os
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import pandas as pd
 import pytorch_lightning as pl
@@ -121,6 +121,10 @@ class VQVAE(pl.LightningModule):
         b2: float = 0.999,
         weight_decay: float = 1e-5,
         ckpt_path: str = "",
+        loss_weights: Dict = {
+            "recon_loss": 1.0,
+            "vq_loss": 1.0,
+        },
     ) -> None:
         super(VQVAE, self).__init__()
         self.save_hyperparameters()
@@ -169,10 +173,14 @@ class VQVAE(pl.LightningModule):
 
         # Forward
         x_hat, vq_loss, perplexity = self(x)
-
-        # Calculate loss
         recon_loss = F.mse_loss(x_hat, x)
-        loss = recon_loss + vq_loss
+        loss_dict = {
+            "recon_loss": recon_loss,
+            "vq_loss": vq_loss,
+        }
+        loss = sum(
+            [self.hparams.loss_weights[k] * loss for k, loss in loss_dict.items()]
+        )
 
         # Logging
         self.log_dict(

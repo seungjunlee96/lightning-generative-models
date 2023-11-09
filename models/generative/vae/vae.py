@@ -181,9 +181,13 @@ class VAE(pl.LightningModule):
         if not self.training:
             """Log and cache latent variables for visualization."""
             if batch_idx == 0:
-                self._log_images(x, x_hat, "Reconstruction")
                 self._log_images(
-                    self.decoder.random_sample(batch_size=64), None, "Random Generation"
+                    torch.cat([x, x_hat], dim=0),
+                    "Reconstruction",
+                )
+                self._log_images(
+                    self.decoder.random_sample(batch_size=2 * x.size(0)),
+                    "Random Generation",
                 )
 
             z = self.reparameterize(mu, log_var).detach().cpu()
