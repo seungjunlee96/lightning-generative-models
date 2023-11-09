@@ -25,10 +25,7 @@ class VectorQuantizer(nn.Module):
         self.embedding_dim = embedding_dim
         self.commitment_cost = commitment_cost
 
-        self.embedding = nn.Embedding(self.num_embeddings, self.embedding_dim)  # [K, D]
-        self.embedding.weight.data.uniform_(
-            -1 / self.num_embeddings, 1 / self.num_embeddings
-        )
+        self._init_embedding()
 
     def forward(self, latents: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         quantized_latents, encodings = self._quantize(latents)
@@ -36,6 +33,14 @@ class VectorQuantizer(nn.Module):
         quantized_latents = self._straight_through_estimator(latents, quantized_latents)
         perplexity = self._calculate_perplexity(encodings)
         return quantized_latents, vq_loss, perplexity
+
+    def _init_embedding(self):
+        """Initialize embedding."""
+        self.embedding = nn.Embedding(self.num_embeddings, self.embedding_dim)
+        self.embedding.weight.data.uniform_(
+            -1 / self.num_embeddings,
+            1 / self.num_embeddings,
+        )
 
     def _quantize(self, latents: Tensor) -> Tuple[Tensor, Tensor]:
         """Quantize the latents by replacing each with its closest code."""
@@ -120,18 +125,21 @@ class VectorQuantizerEMA(VectorQuantizer):
         self.decay = decay
         self.epsilon = epsilon
 
+    @torch.no_grad()
     def _ema_update(self, encodings: Tensor, latents: Tensor):
         """Update the codebook embeddings using Exponential Moving Averages."""
         B, D, H, W = latents.shape
         flat_latents = latents.permute(0, 2, 3, 1).reshape(B * H * W, D)
         self._ema_cluster_size.mul_(self.decay).add_(
-            encodings.sum(0), alpha=1 - self.decay
+            encodings.sum(0),
+            alpha=1 - self.decay,
         )
         n = self._ema_cluster_size.sum()
         cluster_weights = (
             (self._ema_cluster_size + self.epsilon)
             / (n + self.num_embeddings * self.epsilon)
-        ) * n
+            * n
+        )
         dw = torch.matmul(encodings.T, flat_latents)
         self._ema_embedding.mul_(self.decay).add_(dw, alpha=1 - self.decay)
         self.embedding.weight.data.copy_(

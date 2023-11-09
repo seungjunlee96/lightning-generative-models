@@ -17,7 +17,11 @@
             "b1": 0.5,
             "b2": 0.999,
             "weight_decay": 1e-5,
-            "ckpt_path": ""
+            "ckpt_path": "",
+            "loss_weights": {
+                "recon_loss": 1,
+                "vq_loss": 10
+            }
         }
     },
     "dataset": {

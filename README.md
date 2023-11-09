@@ -3,6 +3,13 @@
 
 Harness the capabilities of **[PyTorch Lightning](https://lightning.ai/)** and **[Weights & Biases (W&B)](https://wandb.ai/site)** to implement and train a variety of deep generative models, while seamlessly logging your experiments.
 
+## Wandb Experiment Logging
+**Weights & Biases** provides machine learning developers tools to track their experiments, visualize model training and metrics, and optimize machine learning models.
+The figure below is an example of the experiments logging interface on the Wandb platform.
+
+![Wandb Experiments](assets/wandb_experiments.png)
+Visit the [Wandb Experiment Page](https://wandb.ai/i_am_seungjun/Lightning%2520generative%2520models?workspace%253Duser-i_am_seungjun) for more details.
+
 ## 🌟 Models
 
 - GANs
@@ -74,25 +81,28 @@ Use the `config` parser with `train.py`, for example:
 
 ```bash
 # Train GAN
-python train.py --config configs/gan/gan.json
+python train.py --config configs/gan/gan.json --experiment_name gan
 
 # Train CGAN
-python train.py --config configs/gan/cgan.json
+python train.py --config configs/gan/cgan.json --experiment_name cgan
 
 # Train DCGAN
-python train.py --config configs/gan/dcgan.json
+python train.py --config configs/gan/dcgan.json --experiment_name dcgan
+
+# Train WGAN with weight clipping
+python train.py --config configs/gan/wgan_cp.json --experiment_name wgan_cp
 
 # Train WGAN with gradient penalty
-python train.py --config configs/gan/wgan_gp.json
+python train.py --config configs/gan/wgan_gp.json --experiment_name wgan_gp
 
 # Train VAE
-python train.py --config configs/vae/vae.json
+python train.py --config configs/vae/vae.json --experiment_name vae
 
 # Train VQVAE
-python train.py --config configs/vae/vqvae.json
+python train.py --config configs/vae/vqvae.json --experiment_name vqvae
 
 # Train VQVAE with EMA (Exponential Moving Average)
-python train.py --config configs/vae/vqvae_ema.json
+python train.py --config configs/vae/vqvae_ema.json --experiment_name vqvae_ema
 
 # ... and many more
 ```

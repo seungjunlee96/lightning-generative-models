@@ -5,7 +5,7 @@ from datetime import datetime
 from pprint import pprint
 
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 from data.datamodule import DataModule
@@ -28,8 +28,8 @@ def setup_arguments(print_args: bool = True, save_args: bool = True):
     parser.add_argument("--config", type=str, required=True, help="Path to configs")
 
     # Trainer Configurations
-    parser.add_argument("--max_epochs", type=int, default=1000)
-    parser.add_argument("--patience", type=int, default=25)
+    parser.add_argument("--max_epochs", type=int, default=100)
+    parser.add_argument("--accumulate_grad_batches", type=int, default=1)
     parser.add_argument("--ckpt_path", type=str, default=None)
 
     # Logging Configurations
@@ -65,7 +65,9 @@ def setup_arguments(print_args: bool = True, save_args: bool = True):
 
     # Creates an experiment directory
     args.experiment_dir = os.path.join(
-        EXPERIMENTS_DIR, args.config["model"]["name"], args.experiment_name
+        EXPERIMENTS_DIR,
+        args.config["model"]["name"],
+        args.experiment_name,
     )
     os.makedirs(args.experiment_dir, exist_ok=True)
 
@@ -82,7 +84,7 @@ if __name__ == "__main__":
     # Load model, datamodule, logger, and callbacks
     model = load_model(args.config["model"])
     datamodule = DataModule(**args.config["dataset"])
-    logger = WandbLogger(
+    wandb_logger = WandbLogger(
         name=args.experiment_name,
         save_dir=args.experiment_dir,
         project=args.project,
@@ -95,19 +97,14 @@ if __name__ == "__main__":
             save_last=True,
             monitor="val_loss",
         ),
-        EarlyStopping(
-            monitor="val_loss",
-            patience=args.patience,
-            verbose=True,
-            mode="min",
-        ),
     ]
 
     # Trainer
     trainer = pl.Trainer(
         max_epochs=args.max_epochs,
         default_root_dir=args.experiment_dir,
-        logger=logger,
+        accumulate_grad_batches=args.accumulate_grad_batches,
+        logger=wandb_logger,
         callbacks=callbacks,
     )
 
