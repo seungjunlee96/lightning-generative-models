@@ -1,4 +1,4 @@
-# ⚡️Lightning Generative Models
+#  ⚡️Lightning Generative Models
 ![generative_models](assets/generative_models.png)
 
 Harness the capabilities of **[PyTorch Lightning](https://lightning.ai/)** and **[Weights & Biases (W&B)](https://wandb.ai/site)** to implement and train a variety of deep generative models, while seamlessly logging your experiments.
@@ -51,16 +51,16 @@ Assess the quality and performance of your generative models with:
 
 ```bash
 # Clone the repository
-$ git clone https://github.com/seungjunlee96/lightning-generative-models.git
-$ cd lightning-generative-models
+git clone https://github.com/seungjunlee96/lightning-generative-models.git
+cd lightning-generative-models
 
 # Set up a conda environment
-$ conda create -n lightning-generative-models python=3.11
-$ conda activate lightning-generative-models
-$ pip install -r environments/requirements.txt
+conda create -n lightning-generative-models python=3.11 -y
+conda activate lightning-generative-models
+pip install -r environments/requirements.txt
 
 # For contributors
-$ pre-commit install
+pre-commit install
 ```
 
 
@@ -69,19 +69,19 @@ $ pre-commit install
 While automatic dataset downloading is supported, some datasets (e.g., LSUN) require manual downloading:
 
 ```bash
-$ git clone https://github.com/fyu/lsun.git ./data/dataset/LSUN
-$ cd ./data/dataset/LSUN
-$ python3 download.py
-$ for file in *.zip; do unzip "$file"; done
-$ rm *.zip
+chmod +x ./data/download_lsun.sh
+./data/download_lsun.sh
 ```
 
 ### (2) Run `train.py`
 Use the `config` parser with `train.py`, for example:
 
 ```bash
-# Train GAN
+# Train GAN with MNIST
 python train.py --config configs/gan/gan.json --experiment_name gan
+
+# Train LSGAN
+python train.py --config configs/gan/lsgan.json --experiment_name lsgan
 
 # Train CGAN
 python train.py --config configs/gan/cgan.json --experiment_name cgan
@@ -114,5 +114,7 @@ All contributions are welcome! Open an issue for discussions or submit a pull re
 For queries or feedback, email me at lsjj096@gmail.com.
 
 ## 📚 References
+This repo is highly motivated by below amazing works:
 - https://github.com/nocotan/pytorch-lightning-gans
 - https://nn.labml.ai/
+- https://github.com/eriklindernoren/PyTorch-GAN
