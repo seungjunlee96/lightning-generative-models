@@ -11,30 +11,23 @@ The figure below is an example of the experiments logging interface on the Wandb
 Visit the [Wandb Experiment Page](https://wandb.ai/i_am_seungjun/Lightning%2520generative%2520models?workspace%253Duser-i_am_seungjun) for more details.
 
 ## 🌟 Models
-
-- GANs
-    - [GAN](models/generative/gan/gan.py)
-    - [CGAN](models/generative/gan/cgan.py)
-    - [DCGAN](models/generative/gan/dcgan.py)
-    - [LSGAN](models/generative/gan/lsgan.py)
-    - [WGAN](models/generative/gan/wgan.py)
-    - (Upcoming) [CycleGAN](models/generative/gan/cyclegan.py)
-
-- VAEs
-    - [VAE](models/generative/vae/vae.py)
-    - [VQVAE](models/generative/vae/vqvae.py)
-
-- Autoregressive Models
-    - (Upcoming) PixelCNN
-
-- Normalizing Flows
-    - (Upcoming) NICE (Non-linear Independent Components Estimation)
-    - (Upcoming) RealNVP
-    - (Upcoming) Glow
-
-- Diffusion Models
-    - (Upcoming) DDPM
-    - (Upcoming) DDIM
+| Category             | Model Name | Status    | Original Paper Link                                                                                      |
+|----------------------|------------|-----------|---------------------------------------------------------------------------------------------------------|
+| GANs                 | GAN        | Available | [Generative Adversarial Networks](https://arxiv.org/abs/1406.2661)                                       |
+|                      | CGAN       | Available | [Conditional Generative Adversarial Nets](https://arxiv.org/abs/1411.1784)                               |
+|                      | DCGAN      | Available | [Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks](https://arxiv.org/abs/1511.06434) |
+|                      | LSGAN      | Available | [Least Squares Generative Adversarial Networks](https://arxiv.org/abs/1611.04076)                        |
+|                      | WGAN       | Available | [Wasserstein GAN](https://arxiv.org/abs/1701.07875)                                                      |
+|                      | WGAN-GP    | Available | [Improved Training of Wasserstein GANs](https://arxiv.org/abs/1704.00028)                               |
+|                      | CycleGAN   | Upcoming  | [Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks](https://junyanz.github.io/CycleGAN/) |
+| VAEs                 | VAE        | Available | [Auto-Encoding Variational Bayes](https://arxiv.org/abs/1312.6114)                                       |
+|                      | VQVAE      | Available | [Neural Discrete Representation Learning](https://arxiv.org/abs/1711.00937)                              |
+| Autoregressive Models| PixelCNN   | Upcoming  | [Conditional Image Generation with PixelCNN Decoders](https://ar5iv.org/abs/1606.05328)                  |
+| Normalizing Flows    | NICE       | Upcoming  |                                                                                                         |
+|                      | RealNVP    | Upcoming  |                                                                                                         |
+|                      | Glow       | Upcoming  |                                                                                                         |
+| Diffusion Models     | DDPM       | Upcoming  |                                                                                                         |
+|                      | DDIM       | Upcoming  |                                                                                                         |
 
 ## 📊 Evaluation Metrics
 Assess the quality and performance of your generative models with:
@@ -46,8 +39,7 @@ Assess the quality and performance of your generative models with:
 5. Reconstruction-FID
 
 ## 🔧 Installation
-
-**macOS M1 support**: This repository is tested and compatible with the macOS M1 with GPU acceleration.
+I have tested on **(1) the macOS M1** and **(2) Ubuntu NVIDIA Titan X** with GPU acceleration.
 
 ```bash
 # Clone the repository
@@ -70,7 +62,12 @@ While automatic dataset downloading is supported, some datasets (e.g., LSUN) req
 
 ```bash
 chmod +x ./data/download_lsun.sh
+
+# Default to download only bedroom dataset
 ./data/download_lsun.sh
+
+# If you wish to download all LSUN dataset
+./data/download_lsun.sh all
 ```
 
 ### (2) Run `train.py`
