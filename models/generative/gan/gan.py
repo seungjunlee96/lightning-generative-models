@@ -132,27 +132,30 @@ class GAN(pl.LightningModule):
 
     def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
+        x_hat = self.generator.random_sample(x.size(0))
         d_optim, g_optim = self.optimizers()
 
         # Train Discriminator
-        if self.global_step % 2 == 0:
-            loss_dict = self._calculate_d_loss(x)
-            d_optim.zero_grad()
-            self.manual_backward(loss_dict["d_loss"])
-            d_optim.step()
+        loss_dict = self._calculate_d_loss(x, x_hat)
+        d_optim.zero_grad()
+        self.manual_backward(loss_dict["d_loss"])
+        d_optim.step()
 
         # Train Generator
-        else:
-            loss_dict = self._calculate_g_loss(x.size(0))
-            g_optim.zero_grad()
-            self.manual_backward(loss_dict["g_loss"])
-            g_optim.step()
+        loss_dict.update(self._calculate_g_loss(x_hat))
+        g_optim.zero_grad()
+        self.manual_backward(loss_dict["g_loss"])
+        g_optim.step()
 
         self.log_dict(loss_dict, on_step=True, prog_bar=True)
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
         x, _ = batch
-        loss_dict = self._calculate_g_loss(x.size(0))
+        x_hat = self.generator.random_sample(x.size(0))
+
+        loss_dict = self._calculate_d_loss(x, x_hat)
+        loss_dict.update(self._calculate_g_loss(x_hat))
+
         self.log("val_loss", loss_dict["g_loss"], on_epoch=True, prog_bar=True)
         if batch_idx == 0:
             self._log_images(fig_name="Random Generation", batch_size=16)
@@ -172,7 +175,7 @@ class GAN(pl.LightningModule):
         )
         return [d_optim, g_optim], []
 
-    def _calculate_d_loss(self, x: Tensor) -> Tensor:
+    def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Dict:
         """
         Calculate the discriminator loss.
 
@@ -185,7 +188,6 @@ class GAN(pl.LightningModule):
         logits_real = self.discriminator(x)
         d_loss_real = bce_with_logits(logits_real, torch.ones_like(logits_real))
 
-        x_hat = self.generator.random_sample(x.size(0))
         logits_fake = self.discriminator(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
@@ -200,7 +202,7 @@ class GAN(pl.LightningModule):
         }
         return loss_dict
 
-    def _calculate_g_loss(self, batch_size: int) -> Tensor:
+    def _calculate_g_loss(self, x_hat: Tensor) -> Dict:
         """
         Calculate the generator's loss.
 
@@ -208,7 +210,6 @@ class GAN(pl.LightningModule):
         This method generates fake data, passes it through the discriminator, and computes
         the loss based on how well the generator fooled the discriminator.
         """
-        x_hat = self.generator.random_sample(batch_size)
         logits_fake = self.discriminator(x_hat)
 
         if self.hparams.loss_type == "min-max":

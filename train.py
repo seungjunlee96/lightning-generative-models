@@ -10,6 +10,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 from data.datamodule import DataModule
 from utils.load_model import load_model
+from utils.lightning_utils import configure_strategy, configure_num_workers
 
 # Set Constants
 SEED = 10
@@ -28,7 +29,9 @@ def setup_arguments(print_args: bool = True, save_args: bool = True):
     parser.add_argument("--config", type=str, required=True, help="Path to configs")
 
     # Trainer Configurations
+    parser.add_argument("--num_workers", type=int, default=configure_num_workers())
     parser.add_argument("--max_epochs", type=int, default=100)
+    parser.add_argument("--strategy", type=str, default=configure_strategy())
     parser.add_argument("--accumulate_grad_batches", type=int, default=1)
     parser.add_argument("--ckpt_path", type=str, default=None)
 
@@ -83,7 +86,11 @@ if __name__ == "__main__":
 
     # Load model, datamodule, logger, and callbacks
     model = load_model(args.config["model"])
-    datamodule = DataModule(**args.config["dataset"])
+    datamodule = DataModule(
+        **args.config["dataset"],
+        num_workers=args.num_workers,
+        pin_memory=True,
+    )
     wandb_logger = WandbLogger(
         name=args.experiment_name,
         save_dir=args.experiment_dir,
@@ -103,6 +110,7 @@ if __name__ == "__main__":
     trainer = pl.Trainer(
         max_epochs=args.max_epochs,
         default_root_dir=args.experiment_dir,
+        strategy=args.strategy,
         accumulate_grad_batches=args.accumulate_grad_batches,
         logger=wandb_logger,
         callbacks=callbacks,

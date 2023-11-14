@@ -31,7 +31,8 @@ class Generator(nn.Module):
 
         # Initial transformation: Transforms the concatenated noise and class label into a feature map
         self.initial = nn.Sequential(
-            nn.Linear(latent_dim + num_classes, 7 * 7 * 256), nn.LeakyReLU(0.2)
+            nn.Linear(latent_dim + num_classes, 7 * 7 * 256), 
+            nn.LeakyReLU(0.2)
         )
 
         # Deconvolution layers: Upsample the feature map to produce the fake image
@@ -193,21 +194,22 @@ class CGAN(pl.LightningModule):
         """
         x, c = batch
         c = F.one_hot(c, num_classes=self.num_classes).float()
+        z = torch.randn(x.size(0), self.latent_dim).to(self.device)
+        x_hat = self.generator(z, c)
+
         d_optimizer, g_optimizer = self.optimizers()
 
         # Train Discriminator
-        if self.global_step % 2 == 0:
-            loss_dict = self._calculate_d_loss(x, c)
-            d_optimizer.zero_grad()
-            self.manual_backward(loss_dict["d_loss"])
-            d_optimizer.step()
+        loss_dict = self._calculate_d_loss(x, x_hat, c)
+        d_optimizer.zero_grad()
+        self.manual_backward(loss_dict["d_loss"])
+        d_optimizer.step()
 
         # Train Generator
-        else:
-            loss_dict = self._calculate_g_loss(x, c)
-            g_optimizer.zero_grad()
-            self.manual_backward(loss_dict["g_loss"])
-            g_optimizer.step()
+        loss_dict.update(self._calculate_g_loss(x_hat, c))
+        g_optimizer.zero_grad()
+        self.manual_backward(loss_dict["g_loss"])
+        g_optimizer.step()
 
         self.log_dict(loss_dict, on_step=True, prog_bar=True)
         return loss_dict
@@ -222,7 +224,12 @@ class CGAN(pl.LightningModule):
         """
         x, c = batch
         c = F.one_hot(c, num_classes=self.num_classes).float()
-        loss_dict = self._calculate_g_loss(x, c)
+        z = torch.randn(x.size(0), self.latent_dim).to(self.device)
+        x_hat = self.generator(z, c)
+
+        loss_dict = self._calculate_d_loss(x, x_hat, c)
+        loss_dict.update(self._calculate_g_loss(x_hat, c))
+
         self.log("val_loss", loss_dict["g_loss"], on_epoch=True, prog_bar=True)
         if batch_idx == 0:
             self._log_images(fig_name="Random Generation")
@@ -248,7 +255,12 @@ class CGAN(pl.LightningModule):
         )
         return [d_optim, g_optim], []
 
-    def _calculate_d_loss(self, x: Tensor, c: Tensor) -> Tensor:
+    def _calculate_d_loss(
+        self, 
+        x: Tensor, 
+        x_hat: Tensor, 
+        c: Tensor,
+    ) -> Dict[str, Tensor]:
         """
         Calculate the discriminator's loss.
 
@@ -262,9 +274,6 @@ class CGAN(pl.LightningModule):
         logits_real = self.discriminator(x, c)
         d_loss_real = bce_with_logits(logits_real, torch.ones_like(logits_real))
 
-        # Generate fake images
-        z = torch.randn(x.size(0), self.latent_dim).to(self.device)
-        x_hat = self.generator(z, c)
         logits_fake = self.discriminator(x_hat.detach(), c)
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
@@ -279,7 +288,11 @@ class CGAN(pl.LightningModule):
         }
         return loss_dict
 
-    def _calculate_g_loss(self, x: Tensor, c: Tensor) -> Tensor:
+    def _calculate_g_loss(
+        self, 
+        x_hat: Tensor, 
+        c: Tensor,
+    ) -> Dict[str, Tensor]:
         """
         Calculate the generator's loss.
 
@@ -291,9 +304,6 @@ class CGAN(pl.LightningModule):
             Dict[str, Tensor]: Dictionary of loss values and other relevant metrics.
         """
         # Generate fake images
-        z = torch.randn(x.size(0), self.latent_dim, device=self.device)
-        x_hat = self.generator(z, c)
-
         logits_fake = self.discriminator(x_hat, c)
         g_loss = bce_with_logits(logits_fake, torch.ones_like(logits_fake))
 
