@@ -46,9 +46,8 @@ class WGAN(DCGAN):
         self.grad_penalty = grad_penalty
         self.constraint_method = constraint_method
 
-    def _calculate_d_loss(self, x: Tensor) -> Tensor:
+    def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
         batch_size = x.size(0)
-        x_hat = self.generator.random_sample(batch_size)
 
         d_loss_real = self.discriminator(x).mean()
         d_loss_fake = self.discriminator(x_hat.detach()).mean()
@@ -69,13 +68,10 @@ class WGAN(DCGAN):
         }
         return loss_dict
 
-    def _calculate_g_loss(self, batch_size: int) -> Tensor:
-        x_hat = self.generator.random_sample(batch_size)
+    def _calculate_g_loss(self, x_hat: Tenosr) -> Tensor:
         g_loss = -self.discriminator(x_hat).mean()
-
-        loss_dict = {
-            "g_loss": g_loss,
-        }
+        
+        loss_dict = {"g_loss": g_loss}
         return loss_dict
 
     def _calculate_gradient_penalty(

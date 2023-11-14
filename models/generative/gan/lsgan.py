@@ -44,7 +44,7 @@ class LSGAN(DCGAN):
             ckpt_path=ckpt_path,
         )
 
-    def _calculate_d_loss(self, x: Tensor) -> Tensor:
+    def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
         """
         Calculate the discriminator's loss based on the least squares GAN objective.
 
@@ -57,7 +57,6 @@ class LSGAN(DCGAN):
         d_loss_real = 0.5 * torch.mean((logits_real - 1) ** 2)
 
         # Generated images
-        x_hat = self.generator.random_sample(x.size(0))
         logits_fake = self.discriminator(x_hat.detach())
         d_loss_fake = 0.5 * torch.mean(logits_fake**2)
 
@@ -73,7 +72,7 @@ class LSGAN(DCGAN):
         }
         return loss_dict
 
-    def _calculate_g_loss(self, batch_size: int) -> Tensor:
+    def _calculate_g_loss(self, x_hat: Tensor) -> Tensor:
         """
         Calculate the generator's loss based on the least squares GAN objective.
 
@@ -82,7 +81,6 @@ class LSGAN(DCGAN):
         the generator is penalized more when it produces samples that are far from the
         discriminator's decision boundary.
         """
-        x_hat = self.generator.random_sample(batch_size)
         logits_fake = self.discriminator(x_hat)
         g_loss = 0.5 * torch.mean((logits_fake - 1) ** 2)
 

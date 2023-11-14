@@ -6,6 +6,7 @@ in the discriminator and generator, respectively. They introduced several archit
 guidelines to stabilize the training of GANs, resulting in higher quality image generation.
 
 Reference: Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks.
+- https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
 """
 import os
 from typing import Tuple
@@ -19,6 +20,18 @@ from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_log
 from torch.optim import Adam
 
 from utils.visualization import make_grid
+
+
+def initialize_weights(model: nn.Module):
+    for m in model.modules():
+        if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
+            nn.init.normal_(m.weight.data, 0.0, 0.02)
+
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.normal_(m.weight.data, 1.0, 0.02)
+            nn.init.constant_(m.bias.data, 0)
+
+    return model
 
 
 class Generator(nn.Module):
@@ -37,6 +50,7 @@ class Generator(nn.Module):
             self._block(256, 128, 4, 2, 1),
             self._block(128, img_channels, 4, 2, 1, final_layer=True),
         )
+        self.model = initialize_weights(self.model)
 
     @staticmethod
     def _block(
@@ -55,7 +69,12 @@ class Generator(nn.Module):
         """
         return nn.Sequential(
             nn.ConvTranspose2d(
-                in_channels, out_channels, kernel_size, stride, padding, bias=False
+                in_channels, 
+                out_channels,
+                kernel_size, 
+                stride, 
+                padding, 
+                bias=False,
             ),
             nn.BatchNorm2d(out_channels) if not final_layer else nn.Identity(),
             nn.ReLU(inplace=True) if not final_layer else nn.Tanh(),
@@ -80,12 +99,13 @@ class Discriminator(nn.Module):
     ) -> None:
         super(Discriminator, self).__init__()
         self.model = nn.Sequential(
-            self._block(img_channels, 16, 4, 2, 1, use_bn=False),
-            self._block(16, 32, 4, 2, 1),
-            self._block(32, 64, 4, 2, 1),
-            self._block(64, 128, 4, 2, 1),
-            self._block(128, 1, 4, 1, 0, use_bn=False, final_layer=True),
+            self._block(img_channels, 64, 4, 2, 1, use_bn=False),
+            self._block(64, 128, 4, 2, 1, use_bn=True),
+            self._block(128, 256, 4, 2, 1, use_bn=True),
+            self._block(256, 512, 4, 2, 1, use_bn=True),
+            self._block(512, 1, 4, 1, 0, use_bn=False, final_layer=True),
         )
+        self.model = initialize_weights(self.model)
 
     @staticmethod
     def _block(
@@ -105,7 +125,12 @@ class Discriminator(nn.Module):
         """
         return nn.Sequential(
             nn.Conv2d(
-                in_channels, out_channels, kernel_size, stride, padding, bias=False
+                in_channels, 
+                out_channels, 
+                kernel_size, 
+                stride, 
+                padding, 
+                bias=False,
             ),
             nn.BatchNorm2d(out_channels) if use_bn else nn.Identity(),
             nn.LeakyReLU(0.2, inplace=True) if not final_layer else nn.Identity(),
@@ -128,13 +153,13 @@ class DCGAN(pl.LightningModule):
 
     def __init__(
         self,
-        img_channels: int = 3,
-        img_size: int = 64,
-        latent_dim: int = 100,
-        lr: float = 1e-4,
-        b1: float = 0.5,
-        b2: float = 0.999,
-        weight_decay: float = 1e-5,
+        img_channels: int,
+        img_size: int,
+        latent_dim: int,
+        lr: float,
+        b1: float,
+        b2: float,
+        weight_decay: float,
         ckpt_path: str = "",
     ) -> None:
         super(DCGAN, self).__init__()
@@ -146,33 +171,38 @@ class DCGAN(pl.LightningModule):
 
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
+        
+        self.fixed_z = torch.randn([batch_size, latent_dim, 1, 1])
 
     def forward(self, z: Tensor) -> Tensor:
         return self.generator(z)
 
     def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
+        x_hat = self.generator.random_sample(x.size(0))
         d_optim, g_optim = self.optimizers()
-
+ 
         # Train Discriminator
-        if self.global_step % 2 == 0:
-            loss_dict = self._calculate_d_loss(x)
-            d_optim.zero_grad()
-            self.manual_backward(loss_dict["d_loss"])
-            d_optim.step()
+        loss_dict = self._calculate_d_loss(x, x_hat)
+        d_optim.zero_grad()
+        self.manual_backward(loss_dict["d_loss"])
+        d_optim.step()
 
         # Train Generator
-        else:
-            loss_dict = self._calculate_g_loss(x.size(0))
-            g_optim.zero_grad()
-            self.manual_backward(loss_dict["g_loss"])
-            g_optim.step()
+        loss_dict.update(self._calculate_g_loss(x_hat))
+        g_optim.zero_grad()
+        self.manual_backward(loss_dict["g_loss"])
+        g_optim.step()
 
         self.log_dict(loss_dict, on_step=True, prog_bar=True)
 
     def validation_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
-        loss_dict = self._calculate_g_loss(x.size(0))
+        x_hat = self.generator.random_sample(x.size(0))
+
+        loss_dict = self._calculate_d_loss(x, x_hat)
+        loss_dict.update(self._calculate_g_loss(x_hat))
+
         self.log("val_loss", loss_dict["g_loss"], on_epoch=True, prog_bar=True)
         self._log_images(fig_name="Random Generation", batch_size=16)
 
@@ -189,11 +219,10 @@ class DCGAN(pl.LightningModule):
         )
         return [d_optim, g_optim], []
 
-    def _calculate_d_loss(self, x: Tensor) -> Tensor:
+    def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
         logits_real = self.discriminator(x)
         d_loss_real = bce_with_logits(logits_real, torch.ones_like(logits_real))
 
-        x_hat = self.generator.random_sample(x.size(0))
         logits_fake = self.discriminator(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
@@ -208,8 +237,7 @@ class DCGAN(pl.LightningModule):
         }
         return loss_dict
 
-    def _calculate_g_loss(self, batch_size: int) -> Tensor:
-        x_hat = self.generator.random_sample(batch_size)
+    def _calculate_g_loss(self, x_hat: Tensor) -> Tensor:
         logits_fake = self.discriminator(x_hat)
         g_loss = bce_with_logits(logits_fake, torch.ones_like(logits_fake))
 
@@ -221,10 +249,12 @@ class DCGAN(pl.LightningModule):
 
     @torch.no_grad()
     def _log_images(self, fig_name: str, batch_size: int):
-        sample_images = self.generator.random_sample(batch_size=batch_size)
+        sample_images = self.generator(self.fixed_z.to(self.device))
         sample_images = ((sample_images + 1.0) / 2.0) * 255.0
         sample_images = sample_images.clamp(0, 255).byte().detach().cpu()
         fig = make_grid(sample_images)
         self.logger.experiment.log(
-            {fig_name: [wandb.Image(fig)]}, step=self.global_step
+            {fig_name: [wandb.Image(fig)]}, 
+            step=self.global_step,
         )
+

@@ -10,6 +10,24 @@ The figure below is an example of the experiments logging interface on the Wandb
 ![Wandb Experiments](assets/wandb_experiments.png)
 Visit the [Wandb Experiment Page](https://wandb.ai/i_am_seungjun/Lightning%2520generative%2520models?workspace%253Duser-i_am_seungjun) for more details.
 
+## 🔧 Installation
+I have tested on **(1) the macOS M1** and **(2) Ubuntu NVIDIA Titan X** with GPU acceleration.
+
+```bash
+# Clone the repository
+git clone https://github.com/seungjunlee96/lightning-generative-models.git
+cd lightning-generative-models
+
+# Set up a conda environment
+conda create -n lightning-generative-models python=3.11 -y
+conda activate lightning-generative-models
+pip install -r environments/requirements.txt
+
+# For contributors
+pre-commit install
+```
+
+
 ## 🌟 Models
 | Category             | Model Name | Status    | Original Paper Link                                                                                      |
 |----------------------|------------|-----------|---------------------------------------------------------------------------------------------------------|
@@ -28,32 +46,6 @@ Visit the [Wandb Experiment Page](https://wandb.ai/i_am_seungjun/Lightning%2520g
 |                      | Glow       | Upcoming  |                                                                                                         |
 | Diffusion Models     | DDPM       | Upcoming  |                                                                                                         |
 |                      | DDIM       | Upcoming  |                                                                                                         |
-
-## 📊 Evaluation Metrics
-Assess the quality and performance of your generative models with:
-
-1. Inception Score (IS)
-2. Fréchet Inception Distance (FID)
-3. Precision and Recall Distribution (PRD)
-4. Density and Coverage metrics
-5. Reconstruction-FID
-
-## 🔧 Installation
-I have tested on **(1) the macOS M1** and **(2) Ubuntu NVIDIA Titan X** with GPU acceleration.
-
-```bash
-# Clone the repository
-git clone https://github.com/seungjunlee96/lightning-generative-models.git
-cd lightning-generative-models
-
-# Set up a conda environment
-conda create -n lightning-generative-models python=3.11 -y
-conda activate lightning-generative-models
-pip install -r environments/requirements.txt
-
-# For contributors
-pre-commit install
-```
 
 
 ## 🚀 Usage
@@ -103,6 +95,15 @@ python train.py --config configs/vae/vqvae_ema.json --experiment_name vqvae_ema
 
 # ... and many more
 ```
+
+## 📊 Evaluation Metrics
+Assess the quality and performance of your generative models with:
+
+1. Inception Score (IS)
+2. Fréchet Inception Distance (FID)
+3. Precision and Recall Distribution (PRD)
+4. Density and Coverage metrics
+5. Reconstruction-FID
 
 ## 🤝 Contributing
 All contributions are welcome! Open an issue for discussions or submit a pull request directly.

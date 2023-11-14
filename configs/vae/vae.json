@@ -17,8 +17,6 @@
         "img_size": 28,
         "img_channels": 1,
         "batch_size": 32,
-        "num_workers": 0,
-        "pin_memory": true,
         "train_val_split": 0.8,
         "download": true
     }

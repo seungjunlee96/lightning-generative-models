@@ -44,36 +44,52 @@ class DataModule(pl.LightningDataModule):
         """Setup datasets for training, validation, and testing."""
         if self.name == "MNIST":
             full_train_dataset = datasets.MNIST(
-                self.data_dir, train=True, transform=self.transform
+                self.data_dir, 
+                train=True, 
+                transform=self.transform
             )
             num_train = int(len(full_train_dataset) * self.train_val_split)
             num_val = len(full_train_dataset) - num_train
             self.train_dataset, self.val_dataset = random_split(
-                full_train_dataset, [num_train, num_val]
+                full_train_dataset, 
+                [num_train, num_val]
             )
             self.test_dataset = datasets.MNIST(
-                self.data_dir, train=False, transform=self.transform
+                self.data_dir, 
+                train=False, 
+                transform=self.transform
             )
 
         elif self.name == "LSUN":
-            classes = ["church_outdoor"]  # , 'classroom', 'conference_room', 'tower']
+            classes = [
+                "bedroom",
+                # "bridge",
+                # "church_outdoor",
+                # "classroom",
+                # "conference_room", 
+                # "dining_room",
+                # "kitchen",
+                # "living_room",
+                # "restaurant",
+                # "tower",
+            ]
 
             train_classes = [f"{sub_class}_train" for sub_class in classes]
             val_classes = [f"{sub_class}_val" for sub_class in classes]
             test_classes = [f"{sub_class}_val" for sub_class in classes]
 
             self.train_dataset = datasets.LSUN(
-                root=self.data_dir / "lsun",
+                root=self.data_dir / "LSUN",
                 classes=train_classes,
                 transform=self.transform,
             )
             self.val_dataset = datasets.LSUN(
-                root=self.data_dir / "lsun",
+                root=self.data_dir / "LSUN",
                 classes=val_classes,
                 transform=self.transform,
             )
             self.test_dataset = datasets.LSUN(
-                root=self.data_dir / "lsun",
+                root=self.data_dir / "LSUN",
                 classes=test_classes,
                 transform=self.transform,
             )
