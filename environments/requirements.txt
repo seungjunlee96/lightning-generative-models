@@ -11,3 +11,4 @@ black
 black[jupyter]
 lmdb
 wandb
+torchinfo

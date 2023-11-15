@@ -1,5 +1,5 @@
 import os
-from typing import Tuple
+from typing import Tuple, Dict, List
 
 import numpy as np
 import pytorch_lightning as pl
@@ -9,6 +9,7 @@ import wandb
 from torch import Tensor
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
 from torch.optim import Adam
+from torchinfo import summary
 
 from utils.visualization import make_grid
 
@@ -127,6 +128,8 @@ class GAN(pl.LightningModule):
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
 
+        self.summary()
+
     def forward(self, z: torch.Tensor) -> torch.Tensor:
         return self.generator(z)
 
@@ -236,3 +239,36 @@ class GAN(pl.LightningModule):
         self.logger.experiment.log(
             {fig_name: [wandb.Image(fig)]}, step=self.global_step
         )
+
+    def summary(
+        self, 
+        col_names: List[str] = [
+            "input_size",
+            "output_size",
+            "num_params",
+            "params_percent",
+            "kernel_size",
+            "mult_adds",
+            "trainable",            
+        ],
+    ):
+        z = torch.randn([1, self.hparams.latent_dim])
+        x = torch.randn([
+            1, 
+            self.hparams.img_channels, 
+            self.hparams.img_size, 
+            self.hparams.img_size,
+        ])
+        
+        summary(
+            self.generator, 
+            input_data=z,
+            col_names=col_names,
+        )
+        
+        summary(
+            self.discriminator, 
+            input_data=x,
+            col_names=col_names,
+        )
+        

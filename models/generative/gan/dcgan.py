@@ -15,12 +15,12 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import wandb
-from torch import Tensor
+from torch import Tensor, List
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
 from torch.optim import Adam
 
 from utils.visualization import make_grid
-
+from torchinfo import summary
 
 def initialize_weights(model: nn.Module):
     for m in model.modules():
@@ -172,7 +172,8 @@ class DCGAN(pl.LightningModule):
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
         
-        self.fixed_z = torch.randn([batch_size, latent_dim, 1, 1])
+        self.fixed_z = torch.randn([16, latent_dim, 1, 1])
+        self.summary()
 
     def forward(self, z: Tensor) -> Tensor:
         return self.generator(z)
@@ -258,3 +259,35 @@ class DCGAN(pl.LightningModule):
             step=self.global_step,
         )
 
+    def summary(
+        self, 
+        col_names: List[str] = [
+            "input_size",
+            "output_size",
+            "num_params",
+            "params_percent",
+            "kernel_size",
+            "mult_adds",
+            "trainable",            
+        ],
+    ):
+        z = torch.randn([1, self.hparams.latent_dim, 1, 1])
+        x = torch.randn([
+            1, 
+            self.hparams.img_channels, 
+            self.hparams.img_size, 
+            self.hparams.img_size,
+        ])
+        
+        summary(
+            self.generator, 
+            input_data=z,
+            col_names=col_names,
+        )
+        
+        summary(
+            self.discriminator, 
+            input_data=x,
+            col_names=col_names,
+        )
+        
