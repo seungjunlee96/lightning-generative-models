@@ -9,6 +9,7 @@ import wandb
 from torch import Tensor, nn
 from torch.optim import Adam
 from torchvision.utils import make_grid
+from torchinfo import summary
 
 from models.modules.residual import ResidualStack
 from models.modules.vector_quantizer import VectorQuantizer, VectorQuantizerEMA
@@ -163,6 +164,8 @@ class VQVAE(pl.LightningModule):
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
 
+        self.summary()
+
     def forward(self, x: Tensor) -> Tuple[Tensor]:
         latents = self.encoder(x)
         quantized_latents, vq_loss, perplexity = self.vector_quantizer(latents)
@@ -260,4 +263,29 @@ class VQVAE(pl.LightningModule):
         self.logger.experiment.log(
             {"embedding": wandb.Table(data=data)},
             step=self.global_step,
+        )
+
+    def summary(
+        self, 
+        col_names: List[str] = [
+            "input_size",
+            "output_size",
+            "num_params",
+            "params_percent",
+            "kernel_size",
+            "mult_adds",
+            "trainable",            
+        ],
+    ):
+        x = torch.randn([
+            1, 
+            self.hparams.img_channels, 
+            self.hparams.img_size, 
+            self.hparams.img_size,
+        ])
+        
+        summary(
+            self,
+            input_data=x,
+            col_names=col_names,
         )

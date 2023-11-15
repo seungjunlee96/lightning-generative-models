@@ -7,6 +7,7 @@ import wandb
 from torch import Tensor, nn
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
 from torch.optim import Adam
+from torchinfo import summary
 
 from utils.visualization import make_grid
 
@@ -168,6 +169,8 @@ class CGAN(pl.LightningModule):
         )
         self.latent_dim = latent_dim
         self.num_classes = num_classes
+
+        self.summary()
 
     def forward(self, z: Tensor, c: Tensor) -> Tensor:
         """
@@ -338,3 +341,41 @@ class CGAN(pl.LightningModule):
             {fig_name: [wandb.Image(fig)]},
             step=self.global_step,
         )
+
+    def summary(
+        self, 
+        col_names: List[str] = [
+            "input_size",
+            "output_size",
+            "num_params",
+            "params_percent",
+            "kernel_size",
+            "mult_adds",
+            "trainable",            
+        ],
+    ):
+
+        z = torch.randn([self.num_classes, self.latent_dim])
+        c = F.one_hot(
+            torch.arange(0, self.num_classes),
+            num_classes=self.num_classes,
+        ).float()
+        x = torch.randn([
+            1, 
+            self.hparams.img_channels, 
+            self.hparams.img_size, 
+            self.hparams.img_size,
+        ])
+        
+        summary(
+            self.generator, 
+            input_data=[z, c],
+            col_names=col_names,
+        )
+        
+        summary(
+            self.discriminator, 
+            input_data=[x, c],
+            col_names=col_names,
+        )
+        
