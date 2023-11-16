@@ -1,4 +1,5 @@
 import importlib
+import json
 from typing import Dict
 
 GENERATIVE_MODELS = [
@@ -40,3 +41,45 @@ def load_model(model_config: Dict):
     raise ValueError(
         f"Failed to import {model_name}. Errors encountered: {', '.join(errors)}"
     )
+
+
+def load_config(config_path: str):
+    """
+    Loads a configuration file and performs a sanity check to ensure that img_channels and img_size
+    match between the model and dataset configurations.
+
+    Args:
+    - config_path (str): Path to the configuration file.
+
+    Returns:
+    - dict: The loaded configuration if the sanity check passes.
+
+    Raises:
+    - FileNotFoundError: If the configuration file does not exist.
+    - ValueError: If the img_channels or img_size do not match.
+    - json.JSONDecodeError: If the file is not a valid JSON.
+    """
+    # Load the configuration file
+    try:
+        with open(config_path, "r") as file:
+            config = json.load(file)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Configuration file not found at '{config_path}'.")
+    except json.JSONDecodeError:
+        raise ValueError(f"The file at '{config_path}' is not a valid JSON.")
+
+    # Extract model and dataset configurations
+    model_config = config.get("model", {}).get("args", {})
+    dataset_config = config.get("dataset", {})
+
+    # Sanity check for img_channels and img_size
+    if model_config.get("img_channels") != dataset_config.get("img_channels"):
+        raise ValueError(
+            "Mismatch in 'img_channels' between model and dataset configurations."
+        )
+    if model_config.get("img_size") != dataset_config.get("img_size"):
+        raise ValueError(
+            "Mismatch in 'img_size' between model and dataset configurations."
+        )
+
+    return config

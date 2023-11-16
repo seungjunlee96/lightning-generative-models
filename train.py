@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 from datetime import datetime
 from pprint import pprint
@@ -9,8 +8,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 from data.datamodule import DataModule
-from utils.load_model import load_model
-from utils.lightning_utils import configure_strategy, configure_num_workers
+from utils.lightning_utils import configure_num_workers, configure_strategy
+from utils.load_model import load_config, load_model
 
 # Set Constants
 SEED = 10
@@ -63,8 +62,7 @@ def setup_arguments(print_args: bool = True, save_args: bool = True):
     args = parser.parse_args()
 
     # Load json file configs
-    with open(args.config, "r") as f:
-        args.config = json.load(f)
+    args.config = load_config(args.config)
 
     # Creates an experiment directory
     args.experiment_dir = os.path.join(

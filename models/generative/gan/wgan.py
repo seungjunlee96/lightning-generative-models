@@ -47,7 +47,7 @@ class WGAN(DCGAN):
         self.constraint_method = constraint_method
 
     def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
-        batch_size = x.size(0)
+        x.size(0)
 
         d_loss_real = self.discriminator(x).mean()
         d_loss_fake = self.discriminator(x_hat.detach()).mean()
@@ -70,7 +70,7 @@ class WGAN(DCGAN):
 
     def _calculate_g_loss(self, x_hat: Tenosr) -> Tensor:
         g_loss = -self.discriminator(x_hat).mean()
-        
+
         loss_dict = {"g_loss": g_loss}
         return loss_dict
 

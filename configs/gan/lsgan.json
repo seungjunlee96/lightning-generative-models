@@ -14,7 +14,7 @@
         }
     },
     "dataset": {
-        "name": "LSUN",
+        "name": "CelebA",
         "img_size": 64,
         "img_channels": 3,
         "batch_size": 32,
