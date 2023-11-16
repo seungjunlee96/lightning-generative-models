@@ -204,14 +204,14 @@ class CGAN(pl.LightningModule):
         # Train Discriminator
         if self.global_step % 2 == 0:
             loss_dict = self._calculate_d_loss(x, x_hat, c)
-            d_optimizer.zero_grad()
+            d_optimizer.zero_grad(set_to_none=True)
             self.manual_backward(loss_dict["d_loss"])
             d_optimizer.step()
 
         # Train Generator
         else:
             loss_dict = self._calculate_g_loss(x_hat, c)
-            g_optimizer.zero_grad()
+            g_optimizer.zero_grad(set_to_none=True)
             self.manual_backward(loss_dict["g_loss"])
             g_optimizer.step()
 

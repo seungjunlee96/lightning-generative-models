@@ -143,14 +143,14 @@ class GAN(pl.LightningModule):
         # Train Discriminator
         if self.global_step % 2 == 0:
             loss_dict = self._calculate_d_loss(x, x_hat)
-            d_optim.zero_grad()
+            d_optim.zero_grad(set_to_none=True)
             self.manual_backward(loss_dict["d_loss"])
             d_optim.step()
 
         # Train Generator
         else:
             loss_dict = self._calculate_g_loss(x_hat)
-            g_optim.zero_grad()
+            g_optim.zero_grad(set_to_none=True)
             self.manual_backward(loss_dict["g_loss"])
             g_optim.step()
 
