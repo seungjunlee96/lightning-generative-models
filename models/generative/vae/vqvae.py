@@ -8,8 +8,8 @@ import torch.nn.functional as F
 import wandb
 from torch import Tensor, nn
 from torch.optim import Adam
-from torchvision.utils import make_grid
 from torchinfo import summary
+from torchvision.utils import make_grid
 
 from models.modules.residual import ResidualStack
 from models.modules.vector_quantizer import VectorQuantizer, VectorQuantizerEMA
@@ -197,8 +197,7 @@ class VQVAE(pl.LightningModule):
             on_epoch=False if self.training else True,
         )
         if batch_idx == 0 and not self.training:
-            self._log_images(torch.cat([x, x_hat], dim=0), "Reconstruction")
-            self._log_images(self.random_sample(x), "Random Sample")
+            self._log_images(x_hat, "Random Generation")
             self._log_embedding()
         return loss
 
@@ -226,7 +225,8 @@ class VQVAE(pl.LightningModule):
         # Create a grid of images and log it
         fig = make_grid(images)
         self.logger.experiment.log(
-            {fig_name: [wandb.Image(fig)]}, step=self.global_step
+            {fig_name: [wandb.Image(fig)]},
+            step=self.global_step,
         )
 
     @torch.no_grad()
@@ -266,7 +266,7 @@ class VQVAE(pl.LightningModule):
         )
 
     def summary(
-        self, 
+        self,
         col_names: List[str] = [
             "input_size",
             "output_size",
@@ -274,16 +274,18 @@ class VQVAE(pl.LightningModule):
             "params_percent",
             "kernel_size",
             "mult_adds",
-            "trainable",            
+            "trainable",
         ],
     ):
-        x = torch.randn([
-            1, 
-            self.hparams.img_channels, 
-            self.hparams.img_size, 
-            self.hparams.img_size,
-        ])
-        
+        x = torch.randn(
+            [
+                1,
+                self.hparams.img_channels,
+                self.hparams.img_size,
+                self.hparams.img_size,
+            ]
+        )
+
         summary(
             self,
             input_data=x,
