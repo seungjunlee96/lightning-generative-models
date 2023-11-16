@@ -12,3 +12,5 @@ black[jupyter]
 lmdb
 wandb
 torchinfo
+jupyter
+ipykernel

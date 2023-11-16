@@ -15,12 +15,13 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import wandb
-from torch import Tensor, List
+from torch import List, Tensor
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
 from torch.optim import Adam
+from torchinfo import summary
 
 from utils.visualization import make_grid
-from torchinfo import summary
+
 
 def initialize_weights(model: nn.Module):
     for m in model.modules():
@@ -69,11 +70,11 @@ class Generator(nn.Module):
         """
         return nn.Sequential(
             nn.ConvTranspose2d(
-                in_channels, 
+                in_channels,
                 out_channels,
-                kernel_size, 
-                stride, 
-                padding, 
+                kernel_size,
+                stride,
+                padding,
                 bias=False,
             ),
             nn.BatchNorm2d(out_channels) if not final_layer else nn.Identity(),
@@ -125,11 +126,11 @@ class Discriminator(nn.Module):
         """
         return nn.Sequential(
             nn.Conv2d(
-                in_channels, 
-                out_channels, 
-                kernel_size, 
-                stride, 
-                padding, 
+                in_channels,
+                out_channels,
+                kernel_size,
+                stride,
+                padding,
                 bias=False,
             ),
             nn.BatchNorm2d(out_channels) if use_bn else nn.Identity(),
@@ -171,7 +172,7 @@ class DCGAN(pl.LightningModule):
 
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
-        
+
         self.fixed_z = torch.randn([16, latent_dim, 1, 1])
         self.summary()
 
@@ -182,7 +183,7 @@ class DCGAN(pl.LightningModule):
         x, _ = batch
         x_hat = self.generator.random_sample(x.size(0))
         d_optim, g_optim = self.optimizers()
- 
+
         # Train Discriminator
         loss_dict = self._calculate_d_loss(x, x_hat)
         d_optim.zero_grad()
@@ -242,10 +243,7 @@ class DCGAN(pl.LightningModule):
         logits_fake = self.discriminator(x_hat)
         g_loss = bce_with_logits(logits_fake, torch.ones_like(logits_fake))
 
-        loss_dict = {
-            "g_loss": g_loss,
-            "logits_fake": logits_fake.mean(),
-        }
+        loss_dict = {"g_loss": g_loss}
         return loss_dict
 
     @torch.no_grad()
@@ -255,12 +253,12 @@ class DCGAN(pl.LightningModule):
         sample_images = sample_images.clamp(0, 255).byte().detach().cpu()
         fig = make_grid(sample_images)
         self.logger.experiment.log(
-            {fig_name: [wandb.Image(fig)]}, 
+            {fig_name: [wandb.Image(fig)]},
             step=self.global_step,
         )
 
     def summary(
-        self, 
+        self,
         col_names: List[str] = [
             "input_size",
             "output_size",
@@ -268,26 +266,27 @@ class DCGAN(pl.LightningModule):
             "params_percent",
             "kernel_size",
             "mult_adds",
-            "trainable",            
+            "trainable",
         ],
     ):
         z = torch.randn([1, self.hparams.latent_dim, 1, 1])
-        x = torch.randn([
-            1, 
-            self.hparams.img_channels, 
-            self.hparams.img_size, 
-            self.hparams.img_size,
-        ])
-        
+        x = torch.randn(
+            [
+                1,
+                self.hparams.img_channels,
+                self.hparams.img_size,
+                self.hparams.img_size,
+            ]
+        )
+
         summary(
-            self.generator, 
+            self.generator,
             input_data=z,
             col_names=col_names,
         )
-        
+
         summary(
-            self.discriminator, 
+            self.discriminator,
             input_data=x,
             col_names=col_names,
         )
-        

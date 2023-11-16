@@ -50,16 +50,31 @@ pre-commit install
 
 ## 🚀 Usage
 ### (1) Download data
-While automatic dataset downloading is supported, some datasets (e.g., LSUN) require manual downloading:
+While automatic dataset downloading is supported, ome datasets (e.g., LSUN) require manual downloading:
 
+#### Download CycleGAN dataset
 ```bash
-chmod +x ./data/download_lsun.sh
+# Example: monet2photo dataset
+# Available Options: apple2orange, summer2winter_yosemite, horse2zebra, monet2photo, cezanne2photo, ukiyoe2photo, vangogh2photo, maps, cityscapes, facades, iphone2dslr_flower, ae_photos
+chmod +x ./data/download_cyclegan_dataset.sh
+./data/download_cyclegan_dataset.sh monet2photo
+```
+
+#### Download Pix2Pix dataset
+```bash
+chmod +x ./data/download_pix2pix_dataset.sh
+./data/download_pix2pix_dataset.sh
+```
+
+#### LSUN dataset
+```bash
+chmod +x ./data/download_lsun_dataset.sh
 
 # Default to download only bedroom dataset
-./data/download_lsun.sh
+./data/download_lsun_dataset.sh
 
 # If you wish to download all LSUN dataset
-./data/download_lsun.sh all
+./data/download_lsun_dataset.sh all
 ```
 
 ### (2) Run `train.py`
