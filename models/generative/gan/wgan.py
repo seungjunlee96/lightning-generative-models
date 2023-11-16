@@ -62,7 +62,7 @@ class WGAN(DCGAN):
             if self.hparams.constraint_method == "gp":
                 gradient_penalty = self._calculate_gradient_penalty(x, x_hat)
                 d_loss += gradient_penalty
-                loss_dict.update({"gradient_penalty": gradient_penalty})
+                loss_dict["gradient_penalty"] = gradient_penalty
 
             elif self.hparams.constraint_method == "clip":
                 self._weight_clipping()
