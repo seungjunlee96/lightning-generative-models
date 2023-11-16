@@ -202,16 +202,18 @@ class CGAN(pl.LightningModule):
         d_optimizer, g_optimizer = self.optimizers()
 
         # Train Discriminator
-        loss_dict = self._calculate_d_loss(x, x_hat, c)
-        d_optimizer.zero_grad()
-        self.manual_backward(loss_dict["d_loss"])
-        d_optimizer.step()
+        if self.global_step % 2 == 0:
+            loss_dict = self._calculate_d_loss(x, x_hat, c)
+            d_optimizer.zero_grad()
+            self.manual_backward(loss_dict["d_loss"])
+            d_optimizer.step()
 
         # Train Generator
-        loss_dict.update(self._calculate_g_loss(x_hat, c))
-        g_optimizer.zero_grad()
-        self.manual_backward(loss_dict["g_loss"])
-        g_optimizer.step()
+        else:
+            loss_dict = self._calculate_g_loss(x_hat, c)
+            g_optimizer.zero_grad()
+            self.manual_backward(loss_dict["g_loss"])
+            g_optimizer.step()
 
         self.log_dict(loss_dict, on_step=True, prog_bar=True)
         return loss_dict

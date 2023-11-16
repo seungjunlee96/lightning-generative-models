@@ -1,5 +1,5 @@
 import os
-from typing import Tuple, Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pytorch_lightning as pl
@@ -36,13 +36,15 @@ class Generator(nn.Module):
 
         self.model = nn.Sequential(
             nn.Linear(latent_dim, 256),
+            nn.BatchNorm1d(256),
             nn.LeakyReLU(0.2),
             nn.Linear(256, 512),
+            nn.BatchNorm1d(512),
             nn.LeakyReLU(0.2),
             nn.Linear(512, 1024),
+            nn.BatchNorm1d(1024),
             nn.LeakyReLU(0.2),
             nn.Linear(1024, np.prod(self.img_shape)),
-            nn.LeakyReLU(0.2),
             nn.Tanh(),
         )
 
@@ -139,16 +141,18 @@ class GAN(pl.LightningModule):
         d_optim, g_optim = self.optimizers()
 
         # Train Discriminator
-        loss_dict = self._calculate_d_loss(x, x_hat)
-        d_optim.zero_grad()
-        self.manual_backward(loss_dict["d_loss"])
-        d_optim.step()
+        if self.global_step % 2 == 0:
+            loss_dict = self._calculate_d_loss(x, x_hat)
+            d_optim.zero_grad()
+            self.manual_backward(loss_dict["d_loss"])
+            d_optim.step()
 
         # Train Generator
-        loss_dict.update(self._calculate_g_loss(x_hat))
-        g_optim.zero_grad()
-        self.manual_backward(loss_dict["g_loss"])
-        g_optim.step()
+        else:
+            loss_dict = self._calculate_g_loss(x_hat)
+            g_optim.zero_grad()
+            self.manual_backward(loss_dict["g_loss"])
+            g_optim.step()
 
         self.log_dict(loss_dict, on_step=True, prog_bar=True)
 
@@ -241,7 +245,7 @@ class GAN(pl.LightningModule):
         )
 
     def summary(
-        self, 
+        self,
         col_names: List[str] = [
             "input_size",
             "output_size",
@@ -249,26 +253,27 @@ class GAN(pl.LightningModule):
             "params_percent",
             "kernel_size",
             "mult_adds",
-            "trainable",            
+            "trainable",
         ],
     ):
         z = torch.randn([1, self.hparams.latent_dim])
-        x = torch.randn([
-            1, 
-            self.hparams.img_channels, 
-            self.hparams.img_size, 
-            self.hparams.img_size,
-        ])
-        
+        x = torch.randn(
+            [
+                1,
+                self.hparams.img_channels,
+                self.hparams.img_size,
+                self.hparams.img_size,
+            ]
+        )
+
         summary(
-            self.generator, 
+            self.generator,
             input_data=z,
             col_names=col_names,
         )
-        
+
         summary(
-            self.discriminator, 
+            self.discriminator,
             input_data=x,
             col_names=col_names,
         )
-        

@@ -185,16 +185,18 @@ class DCGAN(pl.LightningModule):
         d_optim, g_optim = self.optimizers()
 
         # Train Discriminator
-        loss_dict = self._calculate_d_loss(x, x_hat)
-        d_optim.zero_grad()
-        self.manual_backward(loss_dict["d_loss"])
-        d_optim.step()
+        if self.global_step % 2 == 0:
+            loss_dict = self._calculate_d_loss(x, x_hat)
+            d_optim.zero_grad()
+            self.manual_backward(loss_dict["d_loss"])
+            d_optim.step()
 
         # Train Generator
-        loss_dict.update(self._calculate_g_loss(x_hat))
-        g_optim.zero_grad()
-        self.manual_backward(loss_dict["g_loss"])
-        g_optim.step()
+        else:
+            loss_dict = self._calculate_g_loss(x_hat)
+            g_optim.zero_grad()
+            self.manual_backward(loss_dict["g_loss"])
+            g_optim.step()
 
         self.log_dict(loss_dict, on_step=True, prog_bar=True)
 

@@ -47,25 +47,26 @@ class WGAN(DCGAN):
         self.constraint_method = constraint_method
 
     def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
-        x.size(0)
-
         d_loss_real = self.discriminator(x).mean()
         d_loss_fake = self.discriminator(x_hat.detach()).mean()
 
         d_loss = d_loss_fake - d_loss_real
-
-        if self.hparams.constraint_method == "gp":
-            gradient_penalty = self._calculate_gradient_penalty(x, x_hat)
-            d_loss += gradient_penalty
-
-        elif self.hparams.constraint_method == "clip":
-            self._weight_clipping()
 
         loss_dict = {
             "d_loss": d_loss,
             "d_loss_real": d_loss_real,
             "d_loss_fake": d_loss_fake,
         }
+
+        if self.training:
+            if self.hparams.constraint_method == "gp":
+                gradient_penalty = self._calculate_gradient_penalty(x, x_hat)
+                d_loss += gradient_penalty
+                loss_dict.update({"gradient_penalty": gradient_penalty})
+
+            elif self.hparams.constraint_method == "clip":
+                self._weight_clipping()
+
         return loss_dict
 
     def _calculate_g_loss(self, x_hat: Tensor) -> Tensor:
@@ -106,6 +107,7 @@ class WGAN(DCGAN):
             inputs=interpolated_images,
             grad_outputs=torch.ones_like(scores_on_interpolated),
             create_graph=True,
+            retain_graph=True,
         )[0]
 
         # Compute the gradient penalty
