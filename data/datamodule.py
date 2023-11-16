@@ -164,7 +164,7 @@ class DataModule(pl.LightningDataModule):
                 [
                     transforms.ToTensor(),
                     transforms.Normalize((0.5,), (0.5,)),
-                    transforms.Resize(self.img_size),
+                    transforms.Resize(self.img_size, antialias=True),
                     transforms.CenterCrop(self.img_size),
                 ]
             )
@@ -172,7 +172,9 @@ class DataModule(pl.LightningDataModule):
             return transforms.Compose(
                 [
                     transforms.ToTensor(),
-                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                    transforms.Normalize(
+                        (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), antialias=True
+                    ),
                     transforms.Resize(self.img_size),
                     transforms.CenterCrop(self.img_size),
                 ]

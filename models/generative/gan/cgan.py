@@ -32,8 +32,7 @@ class Generator(nn.Module):
 
         # Initial transformation: Transforms the concatenated noise and class label into a feature map
         self.initial = nn.Sequential(
-            nn.Linear(latent_dim + num_classes, 7 * 7 * 256), 
-            nn.LeakyReLU(0.2)
+            nn.Linear(latent_dim + num_classes, 7 * 7 * 256), nn.LeakyReLU(0.2)
         )
 
         # Deconvolution layers: Upsample the feature map to produce the fake image
@@ -259,9 +258,9 @@ class CGAN(pl.LightningModule):
         return [d_optim, g_optim], []
 
     def _calculate_d_loss(
-        self, 
-        x: Tensor, 
-        x_hat: Tensor, 
+        self,
+        x: Tensor,
+        x_hat: Tensor,
         c: Tensor,
     ) -> Dict[str, Tensor]:
         """
@@ -292,8 +291,8 @@ class CGAN(pl.LightningModule):
         return loss_dict
 
     def _calculate_g_loss(
-        self, 
-        x_hat: Tensor, 
+        self,
+        x_hat: Tensor,
         c: Tensor,
     ) -> Dict[str, Tensor]:
         """
@@ -343,7 +342,7 @@ class CGAN(pl.LightningModule):
         )
 
     def summary(
-        self, 
+        self,
         col_names: List[str] = [
             "input_size",
             "output_size",
@@ -351,31 +350,32 @@ class CGAN(pl.LightningModule):
             "params_percent",
             "kernel_size",
             "mult_adds",
-            "trainable",            
+            "trainable",
         ],
     ):
-
         z = torch.randn([self.num_classes, self.latent_dim])
         c = F.one_hot(
             torch.arange(0, self.num_classes),
             num_classes=self.num_classes,
         ).float()
-        x = torch.randn([
-            1, 
-            self.hparams.img_channels, 
-            self.hparams.img_size, 
-            self.hparams.img_size,
-        ])
-        
+
+        x = torch.randn(
+            [
+                self.num_classes,
+                self.hparams.img_channels,
+                self.hparams.img_size,
+                self.hparams.img_size,
+            ]
+        )
+
         summary(
-            self.generator, 
+            self.generator,
             input_data=[z, c],
             col_names=col_names,
         )
-        
+
         summary(
-            self.discriminator, 
+            self.discriminator,
             input_data=[x, c],
             col_names=col_names,
         )
-        
