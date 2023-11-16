@@ -68,15 +68,13 @@ class WGAN(DCGAN):
         }
         return loss_dict
 
-    def _calculate_g_loss(self, x_hat: Tenosr) -> Tensor:
+    def _calculate_g_loss(self, x_hat: Tensor) -> Tensor:
         g_loss = -self.discriminator(x_hat).mean()
 
         loss_dict = {"g_loss": g_loss}
         return loss_dict
 
-    def _calculate_gradient_penalty(
-        self, x: torch.Tensor, x_hat: torch.Tensor
-    ) -> torch.Tensor:
+    def _calculate_gradient_penalty(self, x: Tensor, x_hat: Tensor) -> Tensor:
         """
         Calculates the gradient penalty for WGAN-GP.
 
@@ -85,11 +83,11 @@ class WGAN(DCGAN):
         mitigates the issue of mode collapse.
 
         Args:
-            x (torch.Tensor): A batch of real images from the dataset.
-            x_hat (torch.Tensor): A batch of images produced by the generator.
+            x (Tensor): A batch of real images from the dataset.
+            x_hat (Tensor): A batch of images produced by the generator.
 
         Returns:
-            torch.Tensor: The computed gradient penalty.
+            Tensor: The computed gradient penalty.
         """
 
         # Generate random tensor for interpolation
