@@ -198,6 +198,7 @@ class VQVAE(pl.LightningModule):
         )
         if batch_idx == 0 and not self.training:
             self._log_images(x_hat, "Random Generation")
+            self._log_images(self.random_sample(x), "Random Sample")
             self._log_embedding()
         return loss
 
@@ -242,7 +243,10 @@ class VQVAE(pl.LightningModule):
 
         # Randomly select embedding indices
         encoding_indices = torch.randint(
-            0, self.hparams.num_embeddings, (B * H * W,), device=self.device
+            0,
+            self.hparams.num_embeddings,
+            (B * H * W,),
+            device=self.device,
         )
 
         # Map indices to their corresponding embeddings
