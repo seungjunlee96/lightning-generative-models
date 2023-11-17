@@ -238,7 +238,7 @@ class VQVAE(pl.LightningModule):
         Args:
             num_samples (int): Number of samples to generate.
         """
-        if not getattr(self, "encoding_indices"):
+        if not hasattr(self, "encoding_indices"):
             latents = self.encoder(x)
             B, D, H, W = latents.shape
 

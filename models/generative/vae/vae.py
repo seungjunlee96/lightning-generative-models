@@ -234,8 +234,10 @@ class VAE(pl.LightningModule):
     @torch.no_grad()
     def _log_latent_embeddings(self):
         """Log the latent space embeddings to WandB for visualization."""
-        data = {f"z_{i}": self.z[:, i] for i in range(self.z.size(1))}
-        data["c"] = self.c
+        z = torch.cat(self.latents)
+        c = torch.cat(self.conds)
+        data = {f"z_{i}": z[:, i] for i in range(z.size(1))}
+        data["c"] = c
         data = pd.DataFrame(data)
         self.logger.experiment.log(
             {"latent space": wandb.Table(data=data)}, step=self.global_step
