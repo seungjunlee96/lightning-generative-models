@@ -169,6 +169,7 @@ class CGAN(pl.LightningModule):
         self.latent_dim = latent_dim
         self.num_classes = num_classes
 
+        self.fixed_z = torch.randn([num_classes, latent_dim])
         self.summary()
 
     def forward(self, z: Tensor, c: Tensor) -> Tensor:
@@ -326,8 +327,8 @@ class CGAN(pl.LightningModule):
             fig_name (str): Name of the figure to be displayed in wandb.
             batch_size (int): Number of images to generate and log.
         """
-        # Generate fake images
-        z = torch.randn([self.num_classes, self.latent_dim], device=self.device)
+        # Generate fake image
+        z = self.fixed_z.to(self.device)
         c = F.one_hot(
             torch.arange(0, self.num_classes, device=self.device),
             num_classes=self.num_classes,

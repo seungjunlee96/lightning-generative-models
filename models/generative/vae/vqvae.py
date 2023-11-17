@@ -238,20 +238,21 @@ class VQVAE(pl.LightningModule):
         Args:
             num_samples (int): Number of samples to generate.
         """
-        latents = self.encoder(x)
-        B, D, H, W = latents.shape
+        if not getattr(self, "encoding_indices"):
+            latents = self.encoder(x)
+            B, D, H, W = latents.shape
 
-        # Randomly select embedding indices
-        encoding_indices = torch.randint(
-            0,
-            self.hparams.num_embeddings,
-            (B * H * W,),
-            device=self.device,
-        )
+            # Randomly select embedding indices
+            self.encoding_indices = torch.randint(
+                0,
+                self.hparams.num_embeddings,
+                (B * H * W,),
+                device=self.device,
+            )
 
         # Map indices to their corresponding embeddings
         quantized_latents = (
-            self.vector_quantizer.embedding(encoding_indices)
+            self.vector_quantizer.embedding(self.encoding_indices)
             .reshape(B, H, W, D)
             .permute(0, 3, 1, 2)
             .contiguous()

@@ -15,8 +15,9 @@ import wandb
 from torch import Tensor
 from torch.nn.functional import l1_loss
 from torch.optim import Adam
-from torchvision.utils import make_grid
 from torchinfo import summary
+from torchvision.utils import make_grid
+
 
 class Encoder(nn.Module):
     """
@@ -125,19 +126,16 @@ class VAE(pl.LightningModule):
         self.save_hyperparameters()
 
         self.encoder = Encoder(
-            img_channels=img_channels, 
-            img_size=img_size, 
-            latent_dim=latent_dim
+            img_channels=img_channels, img_size=img_size, latent_dim=latent_dim
         )
         self.decoder = Decoder(
-            img_channels=img_channels, 
-            img_size=img_size, 
-            latent_dim=latent_dim
+            img_channels=img_channels, img_size=img_size, latent_dim=latent_dim
         )
 
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
 
+        self.fixed_z = torch.randn([16, latent_dim])
         self.summary()
 
     def reparameterize(self, mu: Tensor, log_var: Tensor) -> Tensor:
@@ -188,19 +186,18 @@ class VAE(pl.LightningModule):
             """Log and cache latent variables for visualization."""
             if batch_idx == 0:
                 self._log_images(
-                    torch.cat([x, x_hat], dim=0),
-                    "Reconstruction",
-                )
-                self._log_images(
-                    self.decoder.random_sample(batch_size=2 * x.size(0)),
+                    self.decoder(self.fixed_z.to(self.device)),
                     "Random Generation",
                 )
+
+                self.latents = []
+                self.conds = []
 
             z = self.reparameterize(mu, log_var).detach().cpu()
             c = c.cpu()
 
-            self.z = torch.cat([self.z, z], dim=0) if batch_idx else z
-            self.c = torch.cat([self.c, c], dim=0) if batch_idx else c
+            self.latents.append(z)
+            self.conds.append(c)
 
         return loss
 
@@ -244,11 +241,11 @@ class VAE(pl.LightningModule):
             {"latent space": wandb.Table(data=data)}, step=self.global_step
         )
 
-        del self.z
-        del self.c
+        del self.latents
+        del self.conds
 
     def summary(
-        self, 
+        self,
         col_names: List[str] = [
             "input_size",
             "output_size",
@@ -256,16 +253,18 @@ class VAE(pl.LightningModule):
             "params_percent",
             "kernel_size",
             "mult_adds",
-            "trainable",            
+            "trainable",
         ],
     ):
-        x = torch.randn([
-            1, 
-            self.hparams.img_channels, 
-            self.hparams.img_size, 
-            self.hparams.img_size,
-        ])
-        
+        x = torch.randn(
+            [
+                1,
+                self.hparams.img_channels,
+                self.hparams.img_size,
+                self.hparams.img_size,
+            ]
+        )
+
         summary(
             self,
             input_data=x,

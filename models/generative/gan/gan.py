@@ -130,6 +130,7 @@ class GAN(pl.LightningModule):
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
 
+        self.fixed_z = torch.randn([16, latent_dim])
         self.summary()
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
@@ -236,7 +237,7 @@ class GAN(pl.LightningModule):
 
     @torch.no_grad()
     def _log_images(self, fig_name: str, batch_size: int):
-        sample_images = self.generator.random_sample(batch_size=batch_size)
+        sample_images = self.generator(self.fixed_z.to(self.device))
         sample_images = ((sample_images + 1.0) / 2.0) * 255.0
         sample_images = sample_images.clamp(0, 255).byte().detach().cpu()
         fig = make_grid(sample_images)
