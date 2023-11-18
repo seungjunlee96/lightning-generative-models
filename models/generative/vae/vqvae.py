@@ -238,10 +238,10 @@ class VQVAE(pl.LightningModule):
         Args:
             num_samples (int): Number of samples to generate.
         """
-        if not hasattr(self, "encoding_indices"):
-            latents = self.encoder(x)
-            B, D, H, W = latents.shape
+        latents = self.encoder(x)
+        B, D, H, W = latents.shape
 
+        if not hasattr(self, "encoding_indices"):
             # Randomly select embedding indices
             self.encoding_indices = torch.randint(
                 0,
