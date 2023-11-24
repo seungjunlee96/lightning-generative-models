@@ -1,7 +1,9 @@
 #  ⚡️Lightning Generative Models
+Harness the capabilities of **[PyTorch Lightning](https://lightning.ai/)** and **[Weights & Biases (W&B)](https://wandb.ai/site)** to implement and train a variety of deep generative models, while seamlessly logging your experiments.
+
 ![generative_models](assets/generative_models.png)
 
-Harness the capabilities of **[PyTorch Lightning](https://lightning.ai/)** and **[Weights & Biases (W&B)](https://wandb.ai/site)** to implement and train a variety of deep generative models, while seamlessly logging your experiments.
+*Figure modified from https://lilianweng.github.io/*
 
 ## Wandb Experiment Logging
 **Weights & Biases** provides machine learning developers tools to track their experiments, visualize model training and metrics, and optimize machine learning models.
