@@ -58,7 +58,8 @@ def make_grid(tensor, nrows=None, ncols=None):
         ncols = (num_images + nrows - 1) // nrows
 
     grid_img = Image.new(
-        "RGB" if channels == 3 else "L", (width * ncols, height * nrows)
+        "RGB" if channels == 3 else "L",
+        (width * ncols, height * nrows),
     )
 
     for idx, img_tensor in enumerate(tensor):
