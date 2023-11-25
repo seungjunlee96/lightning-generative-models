@@ -16,7 +16,7 @@
         "name": "CelebA",
         "img_size": 64,
         "img_channels": 3,
-        "batch_size": 32,
+        "batch_size": 128,
         "train_val_split": 0.8
     }
 }
