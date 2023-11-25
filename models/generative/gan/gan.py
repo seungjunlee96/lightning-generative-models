@@ -48,10 +48,10 @@ class Generator(nn.Module):
             nn.Tanh(),
         )
 
-    def forward(self, z: torch.Tensor) -> torch.Tensor:
+    def forward(self, z: Tensor) -> Tensor:
         return self.model(z).view(-1, *self.img_shape)
 
-    def random_sample(self, batch_size: int) -> torch.Tensor:
+    def random_sample(self, batch_size: int) -> Tensor:
         z = torch.randn([batch_size, self.latent_dim], device=self.device)
         return self(z)
 
@@ -85,7 +85,7 @@ class Discriminator(nn.Module):
             nn.Linear(256, 1),
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         x_flatten = x.view(x.size(0), -1)
         out = self.model(x_flatten)
         return out.squeeze()
@@ -133,7 +133,7 @@ class GAN(pl.LightningModule):
         self.fixed_z = torch.randn([16, latent_dim])
         self.summary()
 
-    def forward(self, z: torch.Tensor) -> torch.Tensor:
+    def forward(self, z: Tensor) -> Tensor:
         return self.generator(z)
 
     def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
@@ -242,7 +242,8 @@ class GAN(pl.LightningModule):
         sample_images = sample_images.clamp(0, 255).byte().detach().cpu()
         fig = make_grid(sample_images)
         self.logger.experiment.log(
-            {fig_name: [wandb.Image(fig)]}, step=self.global_step
+            {fig_name: [wandb.Image(fig)]},
+            step=self.global_step,
         )
 
     def summary(
