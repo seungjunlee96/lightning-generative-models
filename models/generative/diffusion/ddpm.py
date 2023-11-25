@@ -47,6 +47,7 @@ class DDPM(LightningModule):
         )
 
         self.summary()
+        self.fixed_noise = torch.randn([16, img_channels, img_size, img_size])
 
     def forward(self, noisy_images, timesteps):
         return self.model(noisy_images, timesteps)
@@ -68,7 +69,6 @@ class DDPM(LightningModule):
         timesteps = torch.randint(
             0, self.hparams.diffusion_timesteps, (batch_size,), device=self.device
         ).long()
-
         noisy_images, noise = self.diffusion_scheduler.forward_diffusion(x, timesteps)
         noise_pred = self(noisy_images, timesteps)
         loss = F.mse_loss(noise_pred, noise)
@@ -97,7 +97,9 @@ class DDPM(LightningModule):
         if batch_idx == 0:
             # Sample a few images for visualization
             sample_images = self.diffusion_scheduler.sampling(
-                self.model, torch.randn_like(noisy_images), save_all_steps=False
+                self.model,
+                self.fixed_noise.to(self.device),
+                save_all_steps=False,
             )
             sample_images = ((sample_images + 1.0) / 2.0) * 255.0
             sample_images = sample_images.clamp(0, 255).byte().detach().cpu()

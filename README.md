@@ -29,25 +29,25 @@ pip install -r environments/requirements.txt
 pre-commit install
 ```
 
-
 ## 🌟 Models
-| Category             | Model  | Status    | Original Paper Link                                                                                      |
-|----------------------|------------|-----------|---------------------------------------------------------------------------------------------------------|
-| GANs                 | GAN        | ✅ | [Generative Adversarial Networks](https://arxiv.org/abs/1406.2661)                                       |
-|                      | CGAN       | ✅ | [Conditional Generative Adversarial Nets](https://arxiv.org/abs/1411.1784)                               |
-|                      | DCGAN      | ✅ | [Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks](https://arxiv.org/abs/1511.06434) |
-|                      | LSGAN      | ✅ | [Least Squares Generative Adversarial Networks](https://arxiv.org/abs/1611.04076)                        |
-|                      | WGAN       | ✅ | [Wasserstein GAN](https://arxiv.org/abs/1701.07875)                                                      |
-|                      | WGAN-GP    | ✅ | [Improved Training of Wasserstein GANs](https://arxiv.org/abs/1704.00028)                               |
-|                      | CycleGAN   | -  | [Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks](https://junyanz.github.io/CycleGAN/) |
-| VAEs                 | VAE        | ✅ | [Auto-Encoding Variational Bayes](https://arxiv.org/abs/1312.6114)                                       |
-|                      | VQVAE      | ✅ | [Neural Discrete Representation Learning](https://arxiv.org/abs/1711.00937)                              |
-| Autoregressive Models| PixelCNN   | -  | [Conditional Image Generation with PixelCNN Decoders](https://ar5iv.org/abs/1606.05328)                  |
-| Normalizing Flows    | NICE       | -  |                                                                                                         |
-|                      | RealNVP    | -  |                                                                                                         |
-|                      | Glow       | -  |                                                                                                         |
-| Diffusion Models     | DDPM       | ✅ | [Denoising Diffusion Probabilistic Models  ](https://arxiv.org/abs/2006.11239)                          |
-|                      | DDIM       | -  |                                                                                                         |
+
+| Category             | Model      | Status | Paper Link                                                                                           |
+|----------------------|------------|--------|------------------------------------------------------------------------------------------------------------------|
+| GANs                 | GAN        | ✅     | [Generative Adversarial Networks](https://arxiv.org/abs/1406.2661)                                            |
+|                      | CGAN       | ✅     | [Conditional Generative Adversarial Nets](https://arxiv.org/abs/1411.1784)                                    |
+|                      | DCGAN      | ✅     | [Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks](https://arxiv.org/abs/1511.06434) |
+|                      | LSGAN      | ✅     | [Least Squares Generative Adversarial Networks](https://arxiv.org/abs/1611.04076)                             |
+|                      | WGAN       | ✅     | [Wasserstein GAN](https://arxiv.org/abs/1701.07875)                                                           |
+|                      | WGAN-GP    | ✅     | [Improved Training of Wasserstein GANs](https://arxiv.org/abs/1704.00028)                                      |
+|                      | CycleGAN   | -      | [Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks](https://junyanz.github.io/CycleGAN/) |
+| VAEs                 | VAE        | ✅     | [Auto-Encoding Variational Bayes](https://arxiv.org/abs/1312.6114)                                            |
+|                      | VQVAE      | ✅     | [Neural Discrete Representation Learning](https://arxiv.org/abs/1711.00937)                                   |
+| Autoregressive Models| PixelCNN   | -      | [Conditional Image Generation with PixelCNN Decoders](https://ar5iv.org/abs/1606.05328)                     |
+| Normalizing Flows    | NICE       | -      |                                                                                                                |
+|                      | RealNVP    | -      |                                                                                                                |
+|                      | Glow       | -      |                                                                                                                |
+| Diffusion Models     | DDPM       | ✅     | [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)                                |
+|                      | DDIM       | -      |                                                                                                                |
 
 
 ## 🚀 Usage
