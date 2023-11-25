@@ -110,6 +110,9 @@ python train.py --config configs/vae/vqvae.json --experiment_name vqvae
 # Train VQVAE with EMA (Exponential Moving Average)
 python train.py --config configs/vae/vqvae_ema.json --experiment_name vqvae_ema
 
+# Train DDPM
+python train.py --config configs/diffusion/ddpm.json --experiment_name ddpm
+
 # ... and many more
 ```
 
