@@ -17,10 +17,7 @@ class DDPM(LightningModule):
         img_channels: int = 3,
         img_size: int = 32,
         diffusion_timesteps: int = 1000,
-        lr: float = 1e-4,
-        b1: float = 0.5,
-        b2: float = 0.999,
-        weight_decay: float = 1e-5,
+        lr: float = 2e-5,
         beta_start: float = 1e-4,
         beta_end: float = 1e-2,
     ):
@@ -120,8 +117,6 @@ class DDPM(LightningModule):
         optimizer = torch.optim.Adam(
             self.model.parameters(),
             lr=self.hparams.lr,
-            betas=(self.hparams.b1, self.hparams.b2),
-            weight_decay=self.hparams.weight_decay,
         )
         lr_scheduler = {
             "scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(

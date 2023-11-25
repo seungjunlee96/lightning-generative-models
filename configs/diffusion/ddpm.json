@@ -5,10 +5,7 @@
             "img_size": 64,
             "img_channels": 3,
             "diffusion_timesteps": 1000,
-            "lr": 0.0001,
-            "b1": 0.5,
-            "b2": 0.999,
-            "weight_decay": 1e-5,
+            "lr": 2e-5,
             "beta_start": 1e-4,
             "beta_end": 1e-2
         }

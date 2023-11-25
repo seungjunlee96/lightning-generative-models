@@ -60,24 +60,24 @@ class DiffusionUNet(nn.Module):
         return nn.ModuleList(
             [
                 ConvDownBlock(
-                    128, 128, num_layers=2, num_groups=32, time_emb_channels=512
+                    128, 128, num_layers=2, num_groups=8, time_emb_channels=512
                 ),
                 ConvDownBlock(
-                    128, 128, num_layers=2, num_groups=32, time_emb_channels=512
+                    128, 128, num_layers=2, num_groups=8, time_emb_channels=512
                 ),
                 ConvDownBlock(
-                    128, 256, num_layers=2, num_groups=32, time_emb_channels=512
+                    128, 256, num_layers=2, num_groups=8, time_emb_channels=512
                 ),
                 AttentionDownBlock(
                     256,
                     256,
                     num_layers=2,
                     num_att_heads=4,
-                    num_groups=32,
+                    num_groups=8,
                     time_emb_channels=512,
                 ),
                 ConvDownBlock(
-                    256, 512, num_layers=2, num_groups=32, time_emb_channels=512
+                    256, 512, num_layers=2, num_groups=8, time_emb_channels=512
                 ),
             ]
         )
@@ -89,7 +89,7 @@ class DiffusionUNet(nn.Module):
             512,
             num_layers=2,
             num_att_heads=4,
-            num_groups=32,
+            num_groups=8,
             time_emb_channels=512,
             downsample=False,
         )
@@ -99,24 +99,24 @@ class DiffusionUNet(nn.Module):
         return nn.ModuleList(
             [
                 ConvUpBlock(
-                    1024, 512, num_layers=2, num_groups=32, time_emb_channels=512
+                    1024, 512, num_layers=2, num_groups=8, time_emb_channels=512
                 ),
                 AttentionUpBlock(
                     768,
                     256,
                     num_layers=2,
                     num_att_heads=4,
-                    num_groups=32,
+                    num_groups=8,
                     time_emb_channels=512,
                 ),
                 ConvUpBlock(
-                    512, 256, num_layers=2, num_groups=32, time_emb_channels=512
+                    512, 256, num_layers=2, num_groups=8, time_emb_channels=512
                 ),
                 ConvUpBlock(
-                    384, 128, num_layers=2, num_groups=32, time_emb_channels=512
+                    384, 128, num_layers=2, num_groups=8, time_emb_channels=512
                 ),
                 ConvUpBlock(
-                    256, 128, num_layers=2, num_groups=32, time_emb_channels=512
+                    256, 128, num_layers=2, num_groups=8, time_emb_channels=512
                 ),
             ]
         )
@@ -124,7 +124,7 @@ class DiffusionUNet(nn.Module):
     def _build_output_conv_layer(self) -> nn.Sequential:
         """Builds the final output convolution layer."""
         return nn.Sequential(
-            nn.GroupNorm(32, 256),
+            nn.GroupNorm(8, 256),
             nn.SiLU(),
             nn.Conv2d(256, 3, kernel_size=3, padding=1),
         )
