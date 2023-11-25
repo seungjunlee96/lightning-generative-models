@@ -49,22 +49,16 @@ class DataModule(pl.LightningDataModule):
             ):
                 datasets.CelebA(
                     self.data_dir,
-                    split="train",
+                    split=split,
                     download=self.download,
                     target_type="attr",
                 )
-                datasets.CelebA(
-                    self.data_dir,
-                    split="valid",
-                    download=self.download,
-                    target_type="attr",
-                )
-                datasets.CelebA(
-                    self.data_dir,
-                    split="test",
-                    download=self.download,
-                    target_type="attr",
-                )
+
+        elif self.name == "Flowers102":
+            for split in tqdm(
+                ["train", "val", "test"], desc="Downloading Flowers102 Dataset"
+            ):
+                datasets.Flowers102(self.data_dir, split=split, download=self.download)
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Setup datasets for training, validation, and testing."""
@@ -126,6 +120,17 @@ class DataModule(pl.LightningDataModule):
                 split="test",
                 target_type="attr",
                 transform=self.transform,
+            )
+
+        elif self.name == "Flowers102":
+            self.train_dataset = datasets.Flowers102(
+                self.data_dir, split="train", transform=self.transform
+            )
+            self.val_dataset = datasets.Flowers102(
+                self.data_dir, split="val", transform=self.transform
+            )
+            self.test_dataset = datasets.Flowers102(
+                self.data_dir, split="test", transform=self.transform
             )
 
     def train_dataloader(self) -> DataLoader:
