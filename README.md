@@ -13,7 +13,10 @@ The figure below is an example of the experiments logging interface on the Wandb
 Visit the [Wandb Experiment Page](https://wandb.ai/i_am_seungjun/Lightning%2520generative%2520models?workspace%253Duser-i_am_seungjun) for more details.
 
 ## 🔧 Installation
-I have tested on **(1) macOS M1** and **(2) Ubuntu NVIDIA Titan X** with GPU acceleration.
+I have tested on:
+
+1. **Apple macOS M1 Max** with **MPS acceleration**.
+2. **Ubuntu NVIDIA GPUs** with **Distributed Data Parallelism (DDP) acceleration**.
 
 ```bash
 # Clone the repository
