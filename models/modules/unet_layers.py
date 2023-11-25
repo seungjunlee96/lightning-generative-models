@@ -3,67 +3,121 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class TransformerPositionalEmbedding(nn.Module):
+class SinusoidalPositionalEmbedding(nn.Module):
     """
-    From paper "Attention Is All You Need", section 3.5
+    Implements sinusoidal positional embeddings as described in the "Attention Is All You Need" paper.
+    These embeddings provide a way to encode sequential information for models that do not inherently process sequences.
+
+    Args:
+        dimension (int): Dimension of the embedding.
+        max_timesteps (int): Maximum number of timesteps to encode.
     """
 
-    def __init__(self, dimension, max_timesteps=1000):
-        super(TransformerPositionalEmbedding, self).__init__()
+    def __init__(self, dimension: int, max_timesteps: int = 1000):
+        """
+        Initializes the SinusoidalPositionalEmbedding module.
+
+        Args:
+            dimension (int): Dimension of the embedding.
+            max_timesteps (int, optional): Maximum number of timesteps to encode. Default is 1000.
+        """
+        super().__init__()
         assert dimension % 2 == 0, "Embedding dimension must be even"
+
         self.dimension = dimension
-        self.pe_matrix = torch.zeros(max_timesteps, dimension)
-        # Gather all the even dimensions across the embedding vector
-        even_indices = torch.arange(0, self.dimension, 2)
-        # Calculate the term using log transforms for faster calculations
-        # (https://stackoverflow.com/questions/17891595/pow-vs-exp-performance)
-        log_term = torch.log(torch.tensor(10000.0)) / self.dimension
+        self.pe_matrix = self._generate_positional_matrix(max_timesteps, dimension)
+
+    @staticmethod
+    def _generate_positional_matrix(max_timesteps: int, dimension: int) -> torch.Tensor:
+        """Generates the positional embedding matrix."""
+        even_indices = torch.arange(0, dimension, 2)
+        log_term = torch.log(torch.tensor(10000.0)) / dimension
         div_term = torch.exp(even_indices * -log_term)
 
-        # Precompute positional encoding matrix based on odd/even timesteps
         timesteps = torch.arange(max_timesteps).unsqueeze(1)
-        self.pe_matrix[:, 0::2] = torch.sin(timesteps * div_term)
-        self.pe_matrix[:, 1::2] = torch.cos(timesteps * div_term)
+        pe_matrix = torch.zeros(max_timesteps, dimension)
+        pe_matrix[:, 0::2] = torch.sin(timesteps * div_term)
+        pe_matrix[:, 1::2] = torch.cos(timesteps * div_term)
 
-    def forward(self, timestep):
-        # [bs, d_model]
+        return pe_matrix
+
+    def forward(self, timestep: torch.Tensor) -> torch.Tensor:
+        """
+        Computes positional embeddings for the given timesteps.
+
+        Args:
+            timestep (torch.Tensor): Tensor representing timesteps.
+
+        Returns:
+            torch.Tensor: The positional embeddings for the input timesteps.
+        """
         return self.pe_matrix.to(timestep.device)[timestep]
 
 
 class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, groups=8):
-        super().__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-        self.norm = nn.GroupNorm(groups, out_channels)
-        self.act = nn.SiLU()
+    """
+    Basic convolutional block comprising a convolution layer, group normalization, and SiLU activation.
 
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.norm(x)
-        x = self.act(x)
-        return x
+    Args:
+        in_channels (int): Number of channels in the input.
+        out_channels (int): Number of channels produced by the convolution.
+        groups (int): Number of groups for group normalization.
+    """
+
+    def __init__(self, in_channels: int, out_channels: int, groups: int = 32):
+        """
+        Initializes the ConvBlock module.
+
+        Args:
+            in_channels (int): Number of channels in the input.
+            out_channels (int): Number of channels produced by the convolution.
+            groups (int, optional): Number of groups for group normalization. Default is 32.
+        """
+        super().__init__()
+        groups = min(groups, out_channels) if out_channels % groups != 0 else groups
+        self.block = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.GroupNorm(groups, out_channels),
+            nn.SiLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the ConvBlock.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor.
+        """
+        return self.block(x)
 
 
 class DownsampleBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride, padding):
+    def __init__(self, in_channels: int, out_channels: int, stride: int, padding: int):
         super(DownsampleBlock, self).__init__()
         self.conv = nn.Conv2d(
-            in_channels, out_channels, 3, stride=stride, padding=padding
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            stride=stride,
+            padding=padding,
         )
 
-    def forward(self, input_tensor):
+    def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
         x = self.conv(input_tensor)
         return x
 
 
 class UpsampleBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, scale_factor=2.0):
+    def __init__(self, in_channels: int, out_channels: int, scale_factor: float = 2.0):
         super(UpsampleBlock, self).__init__()
 
         self.scale = scale_factor
-        self.conv = nn.Conv2d(in_channels, out_channels, 3, padding=1)
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
 
-    def forward(self, input_tensor):
+    def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
         # align_corners=True for potential convertibility to ONNX
         x = F.interpolate(
             input_tensor, scale_factor=self.scale, mode="bilinear", align_corners=True
@@ -75,13 +129,25 @@ class UpsampleBlock(nn.Module):
 class ConvDownBlock(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        num_layers,
-        time_emb_channels,
-        num_groups,
-        downsample=True,
+        in_channels: int,
+        out_channels: int,
+        num_layers: int,
+        time_emb_channels: int,
+        num_groups: int,
+        downsample: bool = True,
     ):
+        """
+        Convolutional Down Block.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+            num_layers (int): Number of ResNet layers.
+            time_emb_channels (int): Number of time embedding channels.
+            num_groups (int): Number of groups for group normalization.
+            downsample (bool): Whether to downsample the output.
+
+        """
         super(ConvDownBlock, self).__init__()
         resnet_blocks = []
         for i in range(num_layers):
@@ -104,7 +170,9 @@ class ConvDownBlock(nn.Module):
             else None
         )
 
-    def forward(self, input_tensor, time_embedding):
+    def forward(
+        self, input_tensor: torch.Tensor, time_embedding: torch.Tensor
+    ) -> torch.Tensor:
         x = input_tensor
         for resnet_block in self.resnet_blocks:
             x = resnet_block(x, time_embedding)
@@ -116,13 +184,25 @@ class ConvDownBlock(nn.Module):
 class ConvUpBlock(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        num_layers,
-        time_emb_channels,
-        num_groups,
-        upsample=True,
+        in_channels: int,
+        out_channels: int,
+        num_layers: int,
+        time_emb_channels: int,
+        num_groups: int,
+        upsample: bool = True,
     ):
+        """
+        Convolutional Up Block.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+            num_layers (int): Number of ResNet layers.
+            time_emb_channels (int): Number of time embedding channels.
+            num_groups (int): Number of groups for group normalization.
+            upsample (bool): Whether to upsample the output.
+
+        """
         super(ConvUpBlock, self).__init__()
         resnet_blocks = []
         for i in range(num_layers):
@@ -143,7 +223,9 @@ class ConvUpBlock(nn.Module):
             else None
         )
 
-    def forward(self, input_tensor, time_embedding):
+    def forward(
+        self, input_tensor: torch.Tensor, time_embedding: torch.Tensor
+    ) -> torch.Tensor:
         x = input_tensor
         for resnet_block in self.resnet_blocks:
             x = resnet_block(x, time_embedding)
@@ -159,7 +241,23 @@ class SelfAttentionBlock(nn.Module):
     (https://arxiv.org/pdf/1706.03762.pdf)
     """
 
-    def __init__(self, num_heads, in_channels, num_groups=32, embedding_dim=256):
+    def __init__(
+        self,
+        num_heads: int,
+        in_channels: int,
+        num_groups: int = 32,
+        embedding_dim: int = 256,
+    ):
+        """
+        Self-Attention Block.
+
+        Args:
+            num_heads (int): Number of attention heads.
+            in_channels (int): Number of input channels.
+            num_groups (int): Number of groups for group normalization.
+            embedding_dim (int): Dimension of the embedding.
+
+        """
         super(SelfAttentionBlock, self).__init__()
         # For each of heads use d_k = d_v = d_model / num_heads
         self.num_heads = num_heads
@@ -174,7 +272,7 @@ class SelfAttentionBlock(nn.Module):
         self.final_projection = nn.Linear(embedding_dim, embedding_dim)
         self.norm = nn.GroupNorm(num_channels=embedding_dim, num_groups=num_groups)
 
-    def split_features_for_heads(self, tensor):
+    def split_features_for_heads(self, tensor: torch.Tensor) -> torch.Tensor:
         # We receive Q, K and V at shape [batch, h*w, embedding_dim].
         # This method splits embedding_dim into 'num_heads' features so that
         # each channel becomes of size embedding_dim / num_heads.
@@ -189,7 +287,7 @@ class SelfAttentionBlock(nn.Module):
         heads_splitted_tensor = torch.stack(heads_splitted_tensor, 1)
         return heads_splitted_tensor
 
-    def forward(self, input_tensor):
+    def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
         x = input_tensor
         batch, features, h, w = x.shape
         # Do reshape and transpose input tensor since we want to process depth feature maps, not spatial maps
@@ -238,23 +336,26 @@ class SelfAttentionBlock(nn.Module):
 class AttentionDownBlock(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        num_layers,
-        time_emb_channels,
-        num_groups,
-        num_att_heads,
-        downsample=True,
+        in_channels: int,
+        out_channels: int,
+        num_layers: int,
+        time_emb_channels: int,
+        num_groups: int,
+        num_att_heads: int,
+        downsample: bool = True,
     ):
         """
-        AttentionDownBlock consists of ResNet blocks with Self-Attention blocks in-between
-        :param in_channels:
-        :param out_channels:
-        :param num_layers:
-        :param time_emb_channels:
-        :param num_groups:
-        :param num_att_heads:
-        :param downsample:
+        Attention Down Block.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+            num_layers (int): Number of ResNet layers.
+            time_emb_channels (int): Number of time embedding channels.
+            num_groups (int): Number of groups for group normalization.
+            num_att_heads (int): Number of attention heads.
+            downsample (bool): Whether to downsample the output.
+
         """
         super(AttentionDownBlock, self).__init__()
 
@@ -289,7 +390,9 @@ class AttentionDownBlock(nn.Module):
             else None
         )
 
-    def forward(self, input_tensor, time_embedding):
+    def forward(
+        self, input_tensor: torch.Tensor, time_embedding: torch.Tensor
+    ) -> torch.Tensor:
         x = input_tensor
         for resnet_block, attention_block in zip(
             self.resnet_blocks, self.attention_blocks
@@ -304,22 +407,26 @@ class AttentionDownBlock(nn.Module):
 class AttentionUpBlock(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        num_layers,
-        time_emb_channels,
-        num_groups,
-        num_att_heads,
-        upsample=True,
+        in_channels: int,
+        out_channels: int,
+        num_layers: int,
+        time_emb_channels: int,
+        num_groups: int,
+        num_att_heads: int,
+        upsample: bool = True,
     ):
         """
-        :param in_channels:
-        :param out_channels:
-        :param num_layers:
-        :param time_emb_channels:
-        :param num_groups:
-        :param num_att_heads:
-        :param upsample:
+        Attention Up Block.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+            num_layers (int): Number of ResNet layers.
+            time_emb_channels (int): Number of time embedding channels.
+            num_groups (int): Number of groups for group normalization.
+            num_att_heads (int): Number of attention heads.
+            upsample (bool): Whether to upsample the output.
+
         """
         super(AttentionUpBlock, self).__init__()
 
@@ -352,7 +459,9 @@ class AttentionUpBlock(nn.Module):
             else None
         )
 
-    def forward(self, input_tensor, time_embedding):
+    def forward(
+        self, input_tensor: torch.Tensor, time_embedding: torch.Tensor
+    ) -> torch.Tensor:
         x = input_tensor
         for resnet_block, attention_block in zip(
             self.resnet_blocks, self.attention_blocks
@@ -371,8 +480,22 @@ class ResNetBlock(nn.Module):
     """
 
     def __init__(
-        self, in_channels, out_channels, *, time_emb_channels=None, num_groups=8
+        self,
+        in_channels: int,
+        out_channels: int,
+        time_emb_channels: int = None,
+        num_groups: int = 8,
     ):
+        """
+        ResNet Block.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+            time_emb_channels (int): Number of time embedding channels.
+            num_groups (int): Number of groups for group normalization.
+
+        """
         super(ResNetBlock, self).__init__()
         self.time_embedding_projectile = (
             nn.Sequential(nn.SiLU(), nn.Linear(time_emb_channels, out_channels))
@@ -383,18 +506,18 @@ class ResNetBlock(nn.Module):
         self.block1 = ConvBlock(in_channels, out_channels, groups=num_groups)
         self.block2 = ConvBlock(out_channels, out_channels, groups=num_groups)
         self.residual_conv = (
-            nn.Conv2d(in_channels, out_channels, 1)
+            nn.Conv2d(in_channels, out_channels, kernel_size=1)
             if in_channels != out_channels
             else nn.Identity()
         )
 
-    def forward(self, x, time_embedding=None):
+    def forward(
+        self, x: torch.Tensor, time_embedding: torch.Tensor = None
+    ) -> torch.Tensor:
         input_tensor = x
         h = self.block1(x)
         # According to authors implementations, they inject timestep embedding into the network
         # using MLP after the first conv block in all the ResNet blocks
-        # (https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0706c543/diffusion_tf/models/unet.py#L49)
-
         time_emb = self.time_embedding_projectile(time_embedding)
         time_emb = time_emb[:, :, None, None]
         x = time_emb + h

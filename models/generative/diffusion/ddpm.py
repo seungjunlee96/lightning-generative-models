@@ -6,7 +6,7 @@ import wandb
 from pytorch_lightning import LightningModule
 from torchinfo import summary
 
-from models.generative.autoencoder.diffusion_model_unet import UNet
+from models.generative.autoencoder.diffusion_unet import DiffusionUNet
 from models.scheduler.ddpm import DDPMScheduler
 from utils.visualization import make_grid
 
@@ -39,7 +39,7 @@ class DDPM(LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.model = UNet(img_size=img_size, in_channels=img_channels)
+        self.model = DiffusionUNet(img_size=img_size, in_channels=img_channels)
         self.diffusion_scheduler = DDPMScheduler(
             beta_start=beta_start,
             beta_end=beta_end,
