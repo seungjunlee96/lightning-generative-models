@@ -5,16 +5,14 @@
             "img_size": 64,
             "img_channels": 3,
             "diffusion_timesteps": 1000,
-            "lr": 2e-5,
-            "beta_start": 1e-4,
-            "beta_end": 1e-2
+            "lr": 2e-5
         }
     },
     "dataset": {
         "name": "CelebA",
         "img_size": 64,
         "img_channels": 3,
-        "batch_size": 128,
+        "batch_size": 64,
         "train_val_split": 0.8
     }
 }

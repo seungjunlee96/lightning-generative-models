@@ -3,7 +3,18 @@ import os
 from typing import Optional
 
 import torch
+import torch.distributed as dist
 from pytorch_lightning.strategies import DDPStrategy, SingleDeviceStrategy, Strategy
+
+
+def is_master_process() -> bool:
+    """
+    Determines if the current process is the master process in a distributed setting.
+
+    Returns:
+        bool: True if the current process is the master process, False otherwise.
+    """
+    return dist.get_rank() == 0
 
 
 def configure_strategy() -> Strategy:
