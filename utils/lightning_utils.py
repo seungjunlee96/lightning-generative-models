@@ -14,7 +14,10 @@ def is_master_process() -> bool:
     Returns:
         bool: True if the current process is the master process, False otherwise.
     """
-    return dist.get_rank() == 0
+    if torch.cuda.device_count() > 1:
+        return dist.get_rank() == 0
+    else:
+        return True
 
 
 def configure_strategy() -> Strategy:
