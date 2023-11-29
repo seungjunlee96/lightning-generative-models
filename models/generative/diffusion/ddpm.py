@@ -3,7 +3,7 @@ import math
 from collections import namedtuple
 from functools import partial
 from random import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import pytorch_lightning as pl
 import torch
@@ -950,6 +950,7 @@ class DDPM(pl.LightningModule):
         img_size (int): Size of the input images.
         dim (int): Dimension of the U-Net model.
         diffusion_timesteps (int): Number of timesteps for the diffusion process.
+        sampling_timesteps (int): Number of timesteps for the sampling process.
         lr (float): Learning rate for the optimizer.
         betas (Tuple[float, float]): Coefficients used for computing running averages of gradient and its square.
         ema_update_every (int): Frequency of updates for the EMA module.
@@ -962,6 +963,7 @@ class DDPM(pl.LightningModule):
         img_size: int = 64,
         dim: int = 64,
         diffusion_timesteps: int = 1000,
+        sampling_timesteps: Optional[int] = None,
         lr: float = 2e-5,
         betas: Tuple[float, float] = (0.9, 0.99),
         ema_update_every: int = 10,
@@ -977,6 +979,7 @@ class DDPM(pl.LightningModule):
             model,
             img_size=img_size,
             timesteps=diffusion_timesteps,
+            sampling_timesteps=sampling_timesteps,
         )
         self.channels = img_channels
         self.img_size = img_size

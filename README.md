@@ -50,7 +50,7 @@ pre-commit install
 |                      | RealNVP    | -      |                                                                                                                |
 |                      | Glow       | -      |                                                                                                                |
 | Diffusion Models     | DDPM       | ✅     | [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)                                |
-|                      | DDIM       | -      |                                                                                                                |
+|                      | DDIM       | ✅     | [Denoising Diffusion Implicit Models](https://arxiv.org/abs/2010.02502)                                |
 
 
 ## 🚀 Usage
