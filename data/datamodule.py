@@ -164,33 +164,20 @@ class DataModule(pl.LightningDataModule):
     @property
     def transform(self):
         """Return default transforms for the given dataset."""
-        if self.img_channels == 1:
-            return transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Normalize((0.5,), (0.5,)),
-                    transforms.Resize(self.img_size, antialias=True),
-                    transforms.CenterCrop(self.img_size),
-                ]
-            )
-        elif self.img_channels == 3:
-            return transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Normalize(
-                        (0.5, 0.5, 0.5),
-                        (0.5, 0.5, 0.5),
-                    ),
-                    transforms.Resize(self.img_size, antialias=True),
-                    transforms.CenterCrop(self.img_size),
-                ]
-            )
+        return transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Lambda(lambda t: (t * 2) - 1),
+                transforms.Resize(self.img_size, antialias=True),
+                transforms.CenterCrop(self.img_size),
+            ]
+        )
 
     def sanity_check(self):
         if self.name == "MNIST":
             assert self.img_channels == 1, "MNIST dataset supports `img_channels=1`."
 
-        elif self.name in ["LSUN", "CIFAR10", "CIFAR100"]:
+        else:
             assert (
                 self.img_channels == 3
             ), f"{self.name} dataset supports `img_channels=3`."
