@@ -762,7 +762,8 @@ class GaussianDiffusion(nn.Module):
         ):
             self_cond = x_start if self.self_condition else None
             img, x_start = self.p_sample(img, t, self_cond)
-            imgs.append(img)
+            img = torch.clamp(img, -1, 1)
+            imgs.append(img.detach().cpu())
 
         ret = img if not return_all_timesteps else torch.stack(imgs, dim=1)
 
@@ -788,6 +789,7 @@ class GaussianDiffusion(nn.Module):
         )  # [(T-1, T-2), (T-2, T-3), ..., (1, 0), (0, -1)]
 
         img = torch.randn(shape, device=device)
+        img = torch.clamp(img, -1, 1)
         imgs = [img]
 
         x_start = None
@@ -816,7 +818,8 @@ class GaussianDiffusion(nn.Module):
 
             img = x_start * alpha_next.sqrt() + c * pred_noise + sigma * noise
 
-            imgs.append(img)
+            img = torch.clamp(img, -1, 1)
+            imgs.append(img.detach().cpu())
 
         ret = img if not return_all_timesteps else torch.stack(imgs, dim=1)
 
@@ -946,7 +949,7 @@ class DDPM(pl.LightningModule):
         ema (EMA): Exponential Moving Average module for the diffusion model.
 
     Args:
-        img_channels (int): Number of channels in the input images.
+        img_channels (int): Number of c hannels in the input images.
         img_size (int): Size of the input images.
         dim (int): Dimension of the U-Net model.
         diffusion_timesteps (int): Number of timesteps for the diffusion process.
@@ -1011,10 +1014,24 @@ class DDPM(pl.LightningModule):
             f"{mode}_loss",
             loss,
             prog_bar=True,
-            logger=True,
             sync_dist=True if torch.cuda.device_count() > 1 else False,
         )
+        if self.global_step % 1000 == 0 and is_master_process():
+            self._log_sample()
+
         return loss
+
+    @torch.no_grad()
+    def _log_sample(self):
+        # Log sampled images if it's the first batch of the epoch
+        self.ema.ema_model.eval()
+        sample_images = self.ema.ema_model.sample(batch_size=16)
+        sample_images = (sample_images * 255.0).clamp(0, 255).byte().detach().cpu()
+        fig = make_grid(sample_images)
+        self.logger.experiment.log(
+            {"Random Generation": [wandb.Image(fig)]},
+            step=self.global_step,
+        )
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         return self._common_step(batch, batch_idx, "train")
@@ -1025,18 +1042,7 @@ class DDPM(pl.LightningModule):
         self.ema.update()
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
-        loss = self._common_step(batch, batch_idx, "val")
-
-        # Log sampled images if it's the first batch of the epoch
-        if is_master_process() and batch_idx == 0:
-            sample_images = self.ema.ema_model.sample(batch_size=16)
-            sample_images = (sample_images * 255.0).clamp(0, 255).byte().detach().cpu()
-            fig = make_grid(sample_images)
-            self.logger.experiment.log(
-                {"Random Generation": [wandb.Image(fig)]},
-                step=self.global_step,
-            )
-        return loss
+        return self._common_step(batch, batch_idx, "val")
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         opt = torch.optim.Adam(
