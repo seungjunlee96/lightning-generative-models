@@ -2,11 +2,36 @@ from pathlib import Path
 from typing import Optional, Union
 
 import pytorch_lightning as pl
+import torch
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 from tqdm import tqdm
 
 from utils.path import DATASET_PATH
+
+
+class CenterCropMinXY(object):
+    """
+    Custom transform that performs a center crop on the image in the smaller dimension (X or Y).
+    """
+
+    def __call__(self, image):
+        assert type(image) == torch.Tensor
+        # Get the height and width of the image
+        _, h, w = image.shape
+
+        # Determine the smaller dimension
+        min_dim = min(h, w)
+
+        # Calculate top and left coordinates for cropping
+        top = (h - min_dim) // 2
+        left = (w - min_dim) // 2
+
+        # Perform the crop
+        image = image[:, top: top + min_dim, left: left + min_dim]
+
+        # Update the sample dictionary
+        return image
 
 
 class DataModule(pl.LightningDataModule):
@@ -36,6 +61,42 @@ class DataModule(pl.LightningDataModule):
         self.download = download
 
         self.sanity_check()
+        self.transforms = {
+            "train": transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Normalize(
+                        [0.5] * self.img_channels,
+                        [0.5] * self.img_channels,
+                    ),
+                    CenterCropMinXY(),
+                    transforms.Resize(self.img_size, antialias=True),
+                    transforms.RandomHorizontalFlip(0.5),
+                ]
+            ),
+            "val": transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Normalize(
+                        [0.5] * self.img_channels,
+                        [0.5] * self.img_channels,
+                    ),
+                    CenterCropMinXY(),
+                    transforms.Resize(self.img_size, antialias=True),
+                ]
+            ),
+            "test": transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Normalize(
+                        [0.5] * self.img_channels,
+                        [0.5] * self.img_channels,
+                    ),
+                    CenterCropMinXY(),
+                    transforms.Resize(self.img_size, antialias=True),
+                ]
+            ),
+        }
 
     def prepare_data(self) -> None:
         """Download the data."""
@@ -66,7 +127,7 @@ class DataModule(pl.LightningDataModule):
             full_train_dataset = datasets.MNIST(
                 self.data_dir,
                 train=True,
-                transform=self.transform,
+                transform=self.transforms["train"],
             )
             num_train = int(len(full_train_dataset) * self.train_val_split)
             num_val = len(full_train_dataset) - num_train
@@ -76,7 +137,7 @@ class DataModule(pl.LightningDataModule):
             self.test_dataset = datasets.MNIST(
                 self.data_dir,
                 train=False,
-                transform=self.transform,
+                transform=self.transforms["test"],
             )
 
         elif self.name == "LSUN":
@@ -89,17 +150,17 @@ class DataModule(pl.LightningDataModule):
             self.train_dataset = datasets.LSUN(
                 root=self.data_dir / "LSUN",
                 classes=train_classes,
-                transform=self.transform,
+                transform=self.transforms["train"],
             )
             self.val_dataset = datasets.LSUN(
                 root=self.data_dir / "LSUN",
                 classes=val_classes,
-                transform=self.transform,
+                transform=self.transforms["val"],
             )
             self.test_dataset = datasets.LSUN(
                 root=self.data_dir / "LSUN",
                 classes=test_classes,
-                transform=self.transform,
+                transform=self.transforms["test"],
             )
 
         elif self.name == "CelebA":
@@ -107,30 +168,36 @@ class DataModule(pl.LightningDataModule):
                 self.data_dir,
                 split="train",
                 target_type="attr",
-                transform=self.transform,
+                transform=self.transforms["train"],
             )
             self.val_dataset = datasets.CelebA(
                 self.data_dir,
                 split="valid",
                 target_type="attr",
-                transform=self.transform,
+                transform=self.transforms["val"],
             )
             self.test_dataset = datasets.CelebA(
                 self.data_dir,
                 split="test",
                 target_type="attr",
-                transform=self.transform,
+                transform=self.transforms["test"],
             )
 
         elif self.name == "Flowers102":
             self.train_dataset = datasets.Flowers102(
-                self.data_dir, split="train", transform=self.transform
+                self.data_dir,
+                split="train",
+                transform=self.transforms["train"],
             )
             self.val_dataset = datasets.Flowers102(
-                self.data_dir, split="val", transform=self.transform
+                self.data_dir,
+                split="val",
+                transform=self.transforms["val"],
             )
             self.test_dataset = datasets.Flowers102(
-                self.data_dir, split="test", transform=self.transform
+                self.data_dir,
+                split="test",
+                transform=self.transforms["test"],
             )
 
     def train_dataloader(self) -> DataLoader:
@@ -159,20 +226,6 @@ class DataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
-        )
-
-    @property
-    def transform(self):
-        """Return default transforms for the given dataset."""
-        return transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    [0.5] * self.img_channels, [0.5] * self.img_channels
-                ),
-                transforms.Resize(self.img_size, antialias=True),
-                transforms.CenterCrop(self.img_size),
-            ]
         )
 
     def sanity_check(self):
