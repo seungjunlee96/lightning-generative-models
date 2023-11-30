@@ -16,3 +16,4 @@ jupyter
 ipykernel
 einops
 ema_pytorch
+scipy
