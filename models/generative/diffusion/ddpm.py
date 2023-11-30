@@ -1021,7 +1021,7 @@ class DDPM(pl.LightningModule):
 
         return loss
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def _log_sample(self):
         # Log sampled images if it's the first batch of the epoch
         self.ema.ema_model.eval()
