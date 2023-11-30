@@ -73,11 +73,6 @@ repos:
                     "--ignore", "E121,E122,E123,E124,E125,E126,E127,E128,E129,E131,E133",
                 ]
             exclude: ".*(.fits|.fts|.fit|.txt|tca.*|extern.*|.rst|.md|PyThea/extensions)$"
-    - repo: https://github.com/ambv/black
-      rev: 23.10.0
-      hooks:
-          - id: black
-            language_version: python3.11
     - repo: https://github.com/myint/autoflake
       rev: v2.0.0
       hooks:
