@@ -130,10 +130,9 @@ class UNet(pl.LightningModule):
         self.log(
             f"{split}_loss",
             loss,
-            on_step=True,
-            on_epoch=True,
             prog_bar=True,
             logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
         return loss
 

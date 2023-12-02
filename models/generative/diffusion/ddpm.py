@@ -473,6 +473,14 @@ class Unet(nn.Module):
 
 
 def extract(a, t, x_shape):
+    """Extract some coefficients at specified timesteps,
+    then reshape to [batch_size, 1, 1, 1, 1, ...] for broadcasting purposes.
+
+    Args:
+        a: Tensor to extract from
+        t: Timestep for which the coefficients are to be extracted
+        x_shape: Shape of the current batched samples
+    """
     b, *_ = t.shape
     out = a.gather(-1, t)
     return out.reshape(b, *((1,) * (len(x_shape) - 1)))
@@ -944,7 +952,7 @@ class DDPM(pl.LightningModule):
     Denoising Diffusion Probabilistic Models (DDPM) implementation using PyTorch Lightning.
 
     Attributes:
-        channels (int): Number of image channels.
+       1 channels (int): Number of image channels.
         img_size (int): Size of the input images.
         ema (EMA): Exponential Moving Average module for the diffusion model.
 
@@ -1014,7 +1022,8 @@ class DDPM(pl.LightningModule):
             f"{mode}_loss",
             loss,
             prog_bar=True,
-            sync_dist=True if torch.cuda.device_count() > 1 else False,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
         if self.global_step % 1000 == 0 and is_master_process():
             self._log_sample()

@@ -1,4 +1,3 @@
-from typing import List, Optional
 
 import pytorch_lightning as pl
 import torch
@@ -15,8 +14,8 @@ class MaskedConv2d(nn.Conv2d):
         _, _, kH, kW = self.weight.size()
         self.mask.fill_(1)
         # Mask out future pixel values for each pixel.
-        self.mask[:, :, kH // 2, kW // 2 + (mask_type == "B") :] = 0
-        self.mask[:, :, kH // 2 + 1 :] = 0
+        self.mask[:, :, kH // 2, kW // 2 + (mask_type == "B"):] = 0
+        self.mask[:, :, kH // 2 + 1:] = 0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Apply the mask to the weights before the convolution operation
@@ -80,7 +79,13 @@ class PixelCNN(pl.LightningModule):
         output = self(data)
         # Compute the cross-entropy loss between predictions and targets
         loss = nn.CrossEntropyLoss()(output, target)
-        self.log("train_loss", loss)
+        self.log(
+            "train_loss",
+            loss,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
         return loss
 
     def configure_optimizers(self) -> torch.optim.Optimizer:

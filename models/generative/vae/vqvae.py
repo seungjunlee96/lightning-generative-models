@@ -193,8 +193,9 @@ class VQVAE(pl.LightningModule):
                 f"{split}_vq_loss": vq_loss,
                 f"{split}_perplexity": perplexity,
             },
-            on_step=True if self.training else False,
-            on_epoch=False if self.training else True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
         if batch_idx == 0 and not self.training:
             self._log_images(x_hat, "Random Generation")

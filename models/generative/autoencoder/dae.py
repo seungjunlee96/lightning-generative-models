@@ -130,7 +130,13 @@ class DAE(pl.LightningModule):
             Tensor: The training loss.
         """
         loss = self._common_step(batch, batch_idx)
-        self.log("loss", loss)
+        self.log(
+            "loss",
+            loss,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
         return loss
 
     def validation_step(
@@ -149,7 +155,13 @@ class DAE(pl.LightningModule):
             Tensor: The training loss.
         """
         loss = self._common_step(batch, batch_idx)
-        self.log("val_loss", loss)
+        self.log(
+            "val_loss",
+            loss,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
         return loss
 
     def add_noise(self, x: Tensor) -> Tensor:

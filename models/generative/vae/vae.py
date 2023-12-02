@@ -177,9 +177,9 @@ class VAE(pl.LightningModule):
                 f"{split}_recon_loss": recon_loss,
                 f"{split}_kld": kld,
             },
-            on_step=True if self.training else False,
-            on_epoch=True if not self.training else True,
             prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
 
         if not self.training:

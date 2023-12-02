@@ -192,17 +192,19 @@ class VQModel(pl.LightningModule):
                 aeloss,
                 prog_bar=True,
                 logger=True,
-                on_step=True,
-                on_epoch=True,
+                sync_dist=torch.cuda.device_count() > 1,
             )
             self.log_dict(
-                log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True
+                log_dict_ae,
+                prog_bar=True,
+                logger=True,
+                sync_dist=torch.cuda.device_count() > 1,
             )
             return aeloss
 
         if optimizer_idx == 1:
             # discriminator
-            discloss, log_dict_disc = self.loss(
+            d_loss, log_dict_disc = self.loss(
                 qloss,
                 x,
                 xrec,
@@ -212,17 +214,19 @@ class VQModel(pl.LightningModule):
                 split="train",
             )
             self.log(
-                "train/discloss",
-                discloss,
+                "train/d_loss",
+                d_loss,
                 prog_bar=True,
                 logger=True,
-                on_step=True,
-                on_epoch=True,
+                sync_dist=torch.cuda.device_count() > 1,
             )
             self.log_dict(
-                log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=True
+                log_dict_disc,
+                prog_bar=True,
+                logger=True,
+                sync_dist=torch.cuda.device_count() > 1,
             )
-            return discloss
+            return d_loss
 
     def validation_step(self, batch, batch_idx):
         x = self.get_input(batch, self.image_key)
@@ -237,7 +241,7 @@ class VQModel(pl.LightningModule):
             split="val",
         )
 
-        discloss, log_dict_disc = self.loss(
+        d_loss, log_dict_disc = self.loss(
             qloss,
             x,
             xrec,
@@ -252,21 +256,27 @@ class VQModel(pl.LightningModule):
             rec_loss,
             prog_bar=True,
             logger=True,
-            on_step=True,
-            on_epoch=True,
-            sync_dist=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
         self.log(
             "val/aeloss",
             aeloss,
             prog_bar=True,
             logger=True,
-            on_step=True,
-            on_epoch=True,
-            sync_dist=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
-        self.log_dict(log_dict_ae)
-        self.log_dict(log_dict_disc)
+        self.log_dict(
+            log_dict_ae,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
+        self.log_dict(
+            log_dict_disc,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
         return self.log_dict
 
     def configure_optimizers(self):
@@ -334,7 +344,10 @@ class VQSegmentationModel(VQModel):
         xrec, qloss = self(x)
         aeloss, log_dict_ae = self.loss(qloss, x, xrec, split="train")
         self.log_dict(
-            log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True
+            log_dict_ae,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
         return aeloss
 
@@ -343,7 +356,10 @@ class VQSegmentationModel(VQModel):
         xrec, qloss = self(x)
         aeloss, log_dict_ae = self.loss(qloss, x, xrec, split="val")
         self.log_dict(
-            log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True
+            log_dict_ae,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
         total_loss = log_dict_ae["val/total_loss"]
         self.log(
@@ -351,9 +367,7 @@ class VQSegmentationModel(VQModel):
             total_loss,
             prog_bar=True,
             logger=True,
-            on_step=True,
-            on_epoch=True,
-            sync_dist=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
         return aeloss
 
@@ -535,21 +549,23 @@ class GumbelVQ(VQModel):
             )
 
             self.log_dict(
-                log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True
+                log_dict_ae,
+                prog_bar=True,
+                logger=True,
+                sync_dist=torch.cuda.device_count() > 1,
             )
             self.log(
                 "temperature",
                 self.quantize.temperature,
-                prog_bar=False,
+                prog_bar=True,
                 logger=True,
-                on_step=True,
-                on_epoch=True,
+                sync_dist=torch.cuda.device_count() > 1,
             )
             return aeloss
 
         if optimizer_idx == 1:
             # discriminator
-            discloss, log_dict_disc = self.loss(
+            d_loss, log_dict_disc = self.loss(
                 qloss,
                 x,
                 xrec,
@@ -559,9 +575,12 @@ class GumbelVQ(VQModel):
                 split="train",
             )
             self.log_dict(
-                log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=True
+                log_dict_disc,
+                prog_bar=True,
+                logger=True,
+                sync_dist=torch.cuda.device_count() > 1,
             )
-            return discloss
+            return d_loss
 
     def validation_step(self, batch, batch_idx):
         x = self.get_input(batch, self.image_key)
@@ -576,7 +595,7 @@ class GumbelVQ(VQModel):
             split="val",
         )
 
-        discloss, log_dict_disc = self.loss(
+        d_loss, log_dict_disc = self.loss(
             qloss,
             x,
             xrec,
@@ -591,21 +610,27 @@ class GumbelVQ(VQModel):
             rec_loss,
             prog_bar=True,
             logger=True,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
         self.log(
             "val/aeloss",
             aeloss,
             prog_bar=True,
             logger=True,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
+            sync_dist=torch.cuda.device_count() > 1,
         )
-        self.log_dict(log_dict_ae)
-        self.log_dict(log_dict_disc)
+        self.log_dict(
+            log_dict_ae,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
+        self.log_dict(
+            log_dict_disc,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
         return self.log_dict
 
     def log_images(self, batch, **kwargs):

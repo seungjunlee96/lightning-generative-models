@@ -155,7 +155,12 @@ class GAN(pl.LightningModule):
             self.manual_backward(loss_dict["g_loss"])
             g_optim.step()
 
-        self.log_dict(loss_dict, on_step=True, prog_bar=True)
+        self.log_dict(
+            loss_dict,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
         x, _ = batch
@@ -164,7 +169,13 @@ class GAN(pl.LightningModule):
         loss_dict = self._calculate_d_loss(x, x_hat)
         loss_dict.update(self._calculate_g_loss(x_hat))
 
-        self.log("val_loss", loss_dict["g_loss"], on_epoch=True, prog_bar=True)
+        self.log(
+            "val_loss",
+            loss_dict["g_loss"],
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
         if batch_idx == 0:
             self._log_images(fig_name="Random Generation", batch_size=16)
 
