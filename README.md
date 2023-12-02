@@ -37,6 +37,7 @@ Visit the [Wandb Experiment Page](https://wandb.ai/i_am_seungjun/Lightning%2520g
 ## 🔧 Installation
 Tested on both **Apple Silicon (M1 Max)** and **Ubuntu NVIDIA GPUs**, supporting **GPU acceleration** and **Distributed Data Parallel (DDP)**.
 
+#### 🐍 For Conda Users
 ```bash
 # Clone the repository
 git clone https://github.com/seungjunlee96/lightning-generative-models.git
@@ -49,6 +50,13 @@ pip install -r environments/requirements.txt
 
 # For contributors
 pre-commit install
+```
+
+#### 🐳 For Docker Users
+```bash
+cd environments
+chmod +x ./install_and_run_docker.sh
+./install_and_run_docker.sh
 ```
 
 ## 🚀 Train
