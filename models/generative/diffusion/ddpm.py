@@ -770,7 +770,6 @@ class GaussianDiffusion(nn.Module):
         ):
             self_cond = x_start if self.self_condition else None
             img, x_start = self.p_sample(img, t, self_cond)
-            img = torch.clamp(img, -1, 1)
             imgs.append(img.detach().cpu())
 
         ret = img if not return_all_timesteps else torch.stack(imgs, dim=1)
@@ -797,7 +796,6 @@ class GaussianDiffusion(nn.Module):
         )  # [(T-1, T-2), (T-2, T-3), ..., (1, 0), (0, -1)]
 
         img = torch.randn(shape, device=device)
-        img = torch.clamp(img, -1, 1)
         imgs = [img]
 
         x_start = None
@@ -826,7 +824,6 @@ class GaussianDiffusion(nn.Module):
 
             img = x_start * alpha_next.sqrt() + c * pred_noise + sigma * noise
 
-            img = torch.clamp(img, -1, 1)
             imgs.append(img.detach().cpu())
 
         ret = img if not return_all_timesteps else torch.stack(imgs, dim=1)
@@ -999,15 +996,12 @@ class DDPM(pl.LightningModule):
         self.ema = EMA(diffusion_model, beta=ema_decay, update_every=ema_update_every)
         self.summary()
 
-    def _common_step(
-        self, batch: torch.Tensor, batch_idx: int, mode: str
-    ) -> torch.Tensor:
+    def _common_step(self, batch: Tuple[torch.Tensor, torch.Tensor], mode: str) -> torch.Tensor:
         """
         A common step for training, validation, and testing.
 
         Args:
             batch (torch.Tensor): Input batch of data.
-            batch_idx (int): Index of the batch.
             mode (str): Mode of operation - 'train', 'val', or 'test'.
 
         Returns:
@@ -1025,33 +1019,38 @@ class DDPM(pl.LightningModule):
             logger=True,
             sync_dist=torch.cuda.device_count() > 1,
         )
+
         if self.global_step % 1000 == 0 and is_master_process():
             self._log_sample()
-
         return loss
 
     @torch.inference_mode()
     def _log_sample(self):
         # Log sampled images if it's the first batch of the epoch
         self.ema.ema_model.eval()
-        sample_images = self.ema.ema_model.sample(batch_size=16)
-        sample_images = (sample_images * 255.0).clamp(0, 255).byte().detach().cpu()
+        sample_images = (
+            self.ema.ema_model
+            .sample(batch_size=16)
+            .mul_(255)
+            .clamp(0, 255)
+            .byte()
+            .detach()
+            .cpu()
+        )
         fig = make_grid(sample_images)
         self.logger.experiment.log(
             {"Random Generation": [wandb.Image(fig)]},
             step=self.global_step,
         )
 
-    def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
-        return self._common_step(batch, batch_idx, "train")
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        return self._common_step(batch, "train")
 
-    def on_train_batch_end(
-        self, outputs: torch.Tensor, batch: torch.Tensor, batch_idx: int
-    ) -> None:
+    def on_train_batch_end(self, outputs, batch, batch_idx):
         self.ema.update()
 
-    def validation_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
-        return self._common_step(batch, batch_idx, "val")
+    def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        return self._common_step(batch, "val")
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         opt = torch.optim.Adam(
