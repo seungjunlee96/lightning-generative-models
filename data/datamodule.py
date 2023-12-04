@@ -53,7 +53,7 @@ class DataModule(pl.LightningDataModule):
         self.data_dir = data_dir
         self.img_size = img_size
         self.img_channels = img_channels
-        self.batch_size = batch_size
+        self.batch_size = int(batch_size / (torch.cuda.device_count() if torch.cuda.device_count() > 1 else 1))
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers
