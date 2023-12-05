@@ -6,7 +6,8 @@ import torch.nn as nn
 import wandb
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
-from torchvision.utils import make_grid
+
+from utils.visualization import make_grid
 
 
 class Encoder(nn.Module):
