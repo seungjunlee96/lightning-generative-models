@@ -9,10 +9,10 @@ import wandb
 from torch import Tensor, nn
 from torch.optim import Adam
 from torchinfo import summary
-from torchvision.utils import make_grid
 
 from models.modules.residual import ResidualStack
 from models.modules.vector_quantizer import VectorQuantizer, VectorQuantizerEMA
+from utils.visualization import make_grid
 
 
 class Encoder(nn.Module):
@@ -221,8 +221,15 @@ class VQVAE(pl.LightningModule):
     @torch.no_grad()
     def _log_images(self, images: Tensor, fig_name: str):
         # Normalize the images to the range [0, 255] for visualization
-        images = ((images + 1.0) / 2.0) * 255.0
-        images = images.clamp(0, 255).byte().detach().cpu()
+        images = (
+            images[:16]
+            .add_(1.0)
+            .mul_(127.5)
+            .clamp(0, 255)
+            .byte()
+            .detach()
+            .cpu()
+        )
 
         # Create a grid of images and log it
         fig = make_grid(images)

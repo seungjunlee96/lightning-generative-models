@@ -91,7 +91,7 @@ python train.py --config configs/vae/vqvae.json --experiment_name vqvae
 python train.py --config configs/vae/vqvae_ema.json --experiment_name vqvae_ema
 
 # Train DDPM
-python train.py --config configs/diffusion/ddpm.json --experiment_name ddpm --max_epochs 1000
+python train.py --config configs/diffusion/ddpm.json --experiment_name ddpm
 
 # ... and many more
 ```
