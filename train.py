@@ -32,6 +32,7 @@ def setup_arguments(print_args: bool = True, save_args: bool = True):
 
     # Trainer Configurations
     parser.add_argument("--num_workers", type=int, default=configure_num_workers())
+    parser.add_argument("--max_epochs", type=int, default=-1)
     parser.add_argument("--max_steps", type=int, default=-1)
     parser.add_argument("--strategy", type=str, default=configure_strategy())
     parser.add_argument("--accumulate_grad_batches", type=int, default=1)
@@ -120,6 +121,7 @@ if __name__ == "__main__":
 
     # Trainer
     trainer = pl.Trainer(
+        max_epochs=args.max_epochs,
         max_steps=args.max_steps,
         default_root_dir=args.experiment_dir,
         strategy=args.strategy,
