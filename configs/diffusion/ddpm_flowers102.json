@@ -2,7 +2,7 @@
     "model": {
         "name": "DDPM",
         "args": {
-            "img_size": 64,
+            "img_size": 32,
             "img_channels": 3,
             "diffusion_timesteps": 1000,
             "sampling_timesteps": null,
@@ -15,7 +15,7 @@
     },
     "dataset": {
         "name": "Flowers102",
-        "img_size": 64,
+        "img_size": 32,
         "img_channels": 3,
         "batch_size": 32,
         "train_val_split": 0.8
