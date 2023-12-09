@@ -212,11 +212,6 @@ class DCGAN(pl.LightningModule):
             sync_dist=torch.cuda.device_count() > 1,
         )
 
-    def on_validation_epoch_start(self) -> None:
-        self.fid.reset()
-        self.kid.reset()
-        self.inception_score = InceptionScore()
-
     def validation_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
         x_hat = self.generator.random_sample(x.size(0))
@@ -242,6 +237,10 @@ class DCGAN(pl.LightningModule):
         self.log("fid_score", fid_score)
         self.log("kid_score", kid_score)
         self.log("is_score", is_score)
+
+        self.fid.reset()
+        self.kid.reset()
+        self.inception_score = InceptionScore()
 
     def update_metrics(self, x, x_hat):
         # Update metrics with real and generated images
