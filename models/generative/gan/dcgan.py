@@ -20,6 +20,8 @@ from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_log
 from torch.optim import Adam
 from torchinfo import summary
 from torchmetrics.image.fid import FrechetInceptionDistance
+from torchmetrics.image.inception import InceptionScore
+from torchmetrics.image.kid import KernelInceptionDistance
 
 from utils.visualization import make_grid
 
@@ -170,7 +172,10 @@ class DCGAN(pl.LightningModule):
 
         self.generator = Generator(img_channels=img_channels, latent_dim=latent_dim)
         self.discriminator = Discriminator(img_channels=img_channels)
-        self.fid = FrechetInceptionDistance(feature=2048)
+
+        self.fid = FrechetInceptionDistance()
+        self.kid = KernelInceptionDistance()
+        self.inception_score = InceptionScore()
 
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
@@ -209,6 +214,8 @@ class DCGAN(pl.LightningModule):
 
     def on_validation_epoch_start(self) -> None:
         self.fid.reset()
+        self.kid.reset()
+        self.inception_score = InceptionScore()
 
     def validation_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
@@ -216,15 +223,6 @@ class DCGAN(pl.LightningModule):
 
         loss_dict = self._calculate_d_loss(x, x_hat)
         loss_dict.update(self._calculate_g_loss(x_hat))
-
-        # Update FID with real and generated images
-        x = ((x + 1.0) / 2.0) * 255.0
-        x = x.clamp(0, 255).byte()
-        x_hat = ((x_hat + 1.0) / 2.0) * 255.0
-        x_hat = x_hat.clamp(0, 255).byte()
-
-        self.fid.update(x, real=True)
-        self.fid.update(x_hat, real=False)
 
         self.log(
             "val_loss",
@@ -234,10 +232,39 @@ class DCGAN(pl.LightningModule):
             sync_dist=torch.cuda.device_count() > 1,
         )
         self._log_images(fig_name="Random Generation", batch_size=16)
+        self.update_metrics(x, x_hat)
 
     def on_validation_epoch_end(self):
         fid_score = self.fid.compute()
-        self.log('fid_score', fid_score)
+        kid_score = self.kid.compute()
+        is_score = self.inception_score.compute()
+
+        self.log("fid_score", fid_score)
+        self.log("kid_score", kid_score)
+        self.log("is_score", is_score)
+
+    def update_metrics(self, x, x_hat):
+        # Update metrics with real and generated images
+        x = (
+            x
+            .add_(1.0)
+            .mul_(127.5)
+            .byte()
+        )
+        x_hat = (
+            x_hat
+            .add_(1.0)
+            .mul_(127.5)
+            .byte()
+        )
+
+        self.fid.update(x, real=True)
+        self.fid.update(x_hat, real=False)
+
+        self.kid.update(x, real=True)
+        self.kid.update(x_hat, real=False)
+
+        self.inception_score.update(x_hat)
 
     def configure_optimizers(self):
         d_optim = Adam(
