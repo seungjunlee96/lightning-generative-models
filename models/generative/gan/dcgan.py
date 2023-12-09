@@ -19,6 +19,7 @@ from torch import List, Tensor
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
 from torch.optim import Adam
 from torchinfo import summary
+from torchmetrics.image.fid import FrechetInceptionDistance
 
 from utils.visualization import make_grid
 
@@ -169,6 +170,7 @@ class DCGAN(pl.LightningModule):
 
         self.generator = Generator(img_channels=img_channels, latent_dim=latent_dim)
         self.discriminator = Discriminator(img_channels=img_channels)
+        self.fid = FrechetInceptionDistance(feature=2048)
 
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
@@ -205,12 +207,24 @@ class DCGAN(pl.LightningModule):
             sync_dist=torch.cuda.device_count() > 1,
         )
 
+    def on_validation_epoch_start(self) -> None:
+        self.fid.reset()
+
     def validation_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
         x_hat = self.generator.random_sample(x.size(0))
 
         loss_dict = self._calculate_d_loss(x, x_hat)
         loss_dict.update(self._calculate_g_loss(x_hat))
+
+        # Update FID with real and generated images
+        x = ((x + 1.0) / 2.0) * 255.0
+        x = x.clamp(0, 255).byte()
+        x_hat = ((x_hat + 1.0) / 2.0) * 255.0
+        x_hat = x_hat.clamp(0, 255).byte()
+
+        self.fid.update(x, real=True)
+        self.fid.update(x_hat, real=False)
 
         self.log(
             "val_loss",
@@ -220,6 +234,10 @@ class DCGAN(pl.LightningModule):
             sync_dist=torch.cuda.device_count() > 1,
         )
         self._log_images(fig_name="Random Generation", batch_size=16)
+
+    def on_validation_epoch_end(self):
+        fid_score = self.fid.compute()
+        self.log('fid_score', fid_score)
 
     def configure_optimizers(self):
         d_optim = Adam(
