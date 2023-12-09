@@ -1,19 +1,21 @@
-torch
-torchvision
-torchaudio
-pytorch_lightning
-numpy
-pandas
-matplotlib
-seaborn
-pre-commit
-black
-black[jupyter]
-lmdb
-wandb
-torchinfo
-jupyter
-ipykernel
-einops
-ema_pytorch
-scipy
+# torch
+# torchvision
+# torchaudio
+# pytorch_lightning
+# torchmetrics
+torchmetrics[image]
+# numpy
+# pandas
+# matplotlib
+# seaborn
+# pre-commit
+# black
+# black[jupyter]
+# lmdb
+# wandb
+# torchinfo
+# jupyter
+# ipykernel
+# einops
+# ema_pytorch
+# scipy
