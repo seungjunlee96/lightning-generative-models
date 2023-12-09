@@ -240,7 +240,7 @@ class DCGAN(pl.LightningModule):
 
         self.fid.reset()
         self.kid.reset()
-        self.inception_score = InceptionScore()
+        self.inception_score = InceptionScore().to(self.device)
 
     def update_metrics(self, x, x_hat):
         # Update metrics with real and generated images
