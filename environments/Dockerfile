@@ -29,6 +29,7 @@ RUN pip install --no-cache-dir \
     torch \
     torchvision \
     pytorch-lightning \
+    torchmetrics \
     wandb \
     pydicom \
     pre-commit \
