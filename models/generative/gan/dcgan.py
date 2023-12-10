@@ -174,7 +174,7 @@ class DCGAN(pl.LightningModule):
         self.discriminator = Discriminator(img_channels=img_channels)
 
         self.fid = FrechetInceptionDistance()
-        self.kid = KernelInceptionDistance()
+        self.kid = KernelInceptionDistance(subset_size=100)
         self.inception_score = InceptionScore()
 
         if os.path.exists(ckpt_path):
@@ -230,13 +230,14 @@ class DCGAN(pl.LightningModule):
         self.update_metrics(x, x_hat)
 
     def on_validation_epoch_end(self):
-        fid_score = self.fid.compute()
-        kid_score = self.kid.compute()
-        is_score = self.inception_score.compute()
+        metrics = self.compute_metrics()
 
-        self.log("fid_score", fid_score)
-        self.log("kid_score", kid_score)
-        self.log("is_score", is_score)
+        self.log_dict(
+            metrics,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
 
         self.fid.reset()
         self.kid.reset()
@@ -264,6 +265,20 @@ class DCGAN(pl.LightningModule):
         self.kid.update(x_hat, real=False)
 
         self.inception_score.update(x_hat)
+
+    def compute_metrics(self):
+        fid_score = self.fid.compute()
+        kid_mean, kid_std = self.kid.compute()
+        is_mean, is_std = self.inception_score.compute()
+
+        metrics = {
+            "fid_score": fid_score,
+            "mean_kid_score": kid_mean,
+            "std_kid_score": kid_std,
+            "mean_inception_score": is_mean,
+            "std_inception_score": is_std,
+        }
+        return metrics
 
     def configure_optimizers(self):
         d_optim = Adam(
@@ -306,9 +321,14 @@ class DCGAN(pl.LightningModule):
     @torch.no_grad()
     def _log_images(self, fig_name: str, batch_size: int):
         sample_images = self.generator(self.fixed_z.to(self.device))
-        sample_images = ((sample_images + 1.0) / 2.0) * 255.0
-        sample_images = sample_images.clamp(0, 255).byte().detach().cpu()
-        fig = make_grid(sample_images)
+        fig = make_grid(
+            sample_images
+            .add_(1.0)
+            .mul_(127.5)
+            .byte()
+            .detach()
+            .cpu()
+        )
         self.logger.experiment.log(
             {fig_name: [wandb.Image(fig)]},
             step=self.global_step,
