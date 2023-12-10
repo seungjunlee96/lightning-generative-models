@@ -36,7 +36,7 @@ def setup_arguments(print_args: bool = True, save_args: bool = True):
     parser.add_argument("--max_steps", type=int, default=-1)
     parser.add_argument("--strategy", type=str, default=configure_strategy())
     parser.add_argument("--accumulate_grad_batches", type=int, default=1)
-    parser.add_argument("--precision", type=str, default=None, help="Use 'bf16' for mixed precision training.")
+    parser.add_argument("--precision", type=str, default=None)
     parser.add_argument("--ckpt_path", type=str, default=None)
 
     # Logging Configurations
