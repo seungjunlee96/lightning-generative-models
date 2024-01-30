@@ -165,10 +165,12 @@ class DCGAN(pl.LightningModule):
         b2: float,
         weight_decay: float,
         ckpt_path: str = "",
+        calculate_metrics: bool = False,
     ) -> None:
         super(DCGAN, self).__init__()
         self.save_hyperparameters()
         self.automatic_optimization = False
+        self.calculate_metrics = calculate_metrics
 
         self.generator = Generator(img_channels=img_channels, latent_dim=latent_dim)
         self.discriminator = Discriminator(img_channels=img_channels)
@@ -227,7 +229,8 @@ class DCGAN(pl.LightningModule):
             sync_dist=torch.cuda.device_count() > 1,
         )
         self._log_images(fig_name="Random Generation", batch_size=16)
-        self.update_metrics(x, x_hat)
+        if self.calculate_metrics:
+            self.update_metrics(x, x_hat)
 
     def on_validation_epoch_end(self):
         metrics = self.compute_metrics()
