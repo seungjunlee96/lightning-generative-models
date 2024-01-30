@@ -93,6 +93,9 @@ python train.py --config configs/vae/vqvae_ema.json --experiment_name vqvae_ema
 # Train DDPM
 python train.py --config configs/diffusion/ddpm.json --experiment_name ddpm
 
+# Train DDIM
+python train.py --config configs/diffusion/ddim.json --experiment_name ddim
+
 # ... and many more
 ```
 
