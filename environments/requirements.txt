@@ -2,6 +2,8 @@ torch
 torchvision
 torchaudio
 pytorch_lightning
+torchmetrics
+torchmetrics[image]
 numpy
 pandas
 matplotlib
