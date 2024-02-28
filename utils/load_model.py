@@ -33,7 +33,7 @@ def load_model(model_config: Dict):
             module = importlib.import_module(
                 f"models.generative.{generative_model}.{model_name.lower()}"
             )
-            model_class = getattr(module, model_name.upper())
+            model_class = getattr(module, model_name)
             return model_class(**model_config["args"])
         except ImportError as e:
             errors.append(str(e))
