@@ -9,7 +9,7 @@ Reference: Unsupervised Representation Learning with Deep Convolutional Generati
 - https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
 """
 import os
-from typing import Tuple
+from typing import Dict, Tuple
 
 import pytorch_lightning as pl
 import torch
@@ -166,18 +166,21 @@ class DCGAN(pl.LightningModule):
         weight_decay: float,
         ckpt_path: str = "",
         calculate_metrics: bool = False,
+        metrics: List[str] = [],
     ) -> None:
         super(DCGAN, self).__init__()
         self.save_hyperparameters()
         self.automatic_optimization = False
         self.calculate_metrics = calculate_metrics
+        self.metrics = metrics
 
         self.generator = Generator(img_channels=img_channels, latent_dim=latent_dim)
         self.discriminator = Discriminator(img_channels=img_channels)
 
-        self.fid = FrechetInceptionDistance()
-        self.kid = KernelInceptionDistance(subset_size=100)
-        self.inception_score = InceptionScore()
+        if self.metrics:
+            self.fid = FrechetInceptionDistance() if "fid" in self.metrics else None
+            self.kid = KernelInceptionDistance(subset_size=100) if "kid" in self.metrics else None
+            self.inception_score = InceptionScore() if "is" in self.metrics else None
 
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
@@ -233,18 +236,19 @@ class DCGAN(pl.LightningModule):
             self.update_metrics(x, x_hat)
 
     def on_validation_epoch_end(self):
-        metrics = self.compute_metrics()
+        if self.metrics:
+            metrics = self.compute_metrics()
 
-        self.log_dict(
-            metrics,
-            prog_bar=True,
-            logger=True,
-            sync_dist=torch.cuda.device_count() > 1,
-        )
+            self.log_dict(
+                metrics,
+                prog_bar=True,
+                logger=True,
+                sync_dist=torch.cuda.device_count() > 1,
+            )
 
-        self.fid.reset()
-        self.kid.reset()
-        self.inception_score = InceptionScore().to(self.device)
+            self.fid.reset() if "fid" in self.metrics else None
+            self.kid.reset() if "kid" in self.metrics else None
+            self.inception_score = InceptionScore().to(self.device) if "is" in self.metrics else None
 
     def update_metrics(self, x, x_hat):
         # Update metrics with real and generated images
@@ -261,18 +265,21 @@ class DCGAN(pl.LightningModule):
             .byte()
         )
 
-        self.fid.update(x, real=True)
-        self.fid.update(x_hat, real=False)
+        if "fid" in self.metrics:
+            self.fid.update(x, real=True)
+            self.fid.update(x_hat, real=False)
 
-        self.kid.update(x, real=True)
-        self.kid.update(x_hat, real=False)
+        if "kid" in self.metrics:
+            self.kid.update(x, real=True)
+            self.kid.update(x_hat, real=False)
 
-        self.inception_score.update(x_hat)
+        if "is" in self.metrics:
+            self.inception_score.update(x_hat)
 
-    def compute_metrics(self):
-        fid_score = self.fid.compute()
-        kid_mean, kid_std = self.kid.compute()
-        is_mean, is_std = self.inception_score.compute()
+    def compute_metrics(self) -> Dict[str, Tensor]:
+        fid_score = self.fid.compute() if "fid" in self.metrics else None
+        kid_mean, kid_std = self.kid.compute() if "kid" in self.metrics else None, None
+        is_mean, is_std = self.inception_score.compute() if "is" in self.metrics else None, None
 
         metrics = {
             "fid_score": fid_score,
