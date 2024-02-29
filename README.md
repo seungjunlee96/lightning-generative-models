@@ -14,10 +14,12 @@ Lightning Generative Models is designed to provide an intuitive and robust frame
 |----------------------|----------|--------|------------------------------------------------------------------------------------------------------------------------|
 | **GANs**             | GAN      | ✅     | [Generative Adversarial Networks](https://arxiv.org/abs/1406.2661)                                                     |
 |                      | CGAN     | ✅     | [Conditional Generative Adversarial Nets](https://arxiv.org/abs/1411.1784)                                             |
+|                      | InfoGAN  | ✅     | [InfoGAN: Interpretable Representation Learning by Information Maximizing Generative Adversarial Nets](https://arxiv.org/abs/1606.03657) |
 |                      | DCGAN    | ✅     | [Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks](https://arxiv.org/abs/1511.06434) |
 |                      | LSGAN    | ✅     | [Least Squares Generative Adversarial Networks](https://arxiv.org/abs/1611.04076)                                      |
 |                      | WGAN     | ✅     | [Wasserstein GAN](https://arxiv.org/abs/1701.07875)                                                                    |
 |                      | WGAN-GP  | ✅     | [Improved Training of Wasserstein GANs](https://arxiv.org/abs/1704.00028)                                              |
+|                      | R1GAN    | ✅     | [Which Training Methods for GANs do actually Converge?](https://arxiv.org/pdf/1801.04406.pdf)                          |
 |                      | CycleGAN | -      | [Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks](https://junyanz.github.io/CycleGAN/) |
 | **VAEs**             | VAE      | ✅     | [Auto-Encoding Variational Bayes](https://arxiv.org/abs/1312.6114)                                                     |
 |                      | VQVAE    | ✅     | [Neural Discrete Representation Learning](https://arxiv.org/abs/1711.00937)                                            |
@@ -72,6 +74,9 @@ python train.py --config configs/gan/lsgan.json --experiment_name lsgan
 # Train CGAN
 python train.py --config configs/gan/cgan.json --experiment_name cgan
 
+# Train InfoGAN
+python train.py --config configs/gan/infogan.json --experiment_name infogan
+
 # Train DCGAN
 python train.py --config configs/gan/dcgan.json --experiment_name dcgan
 
@@ -80,6 +85,9 @@ python train.py --config configs/gan/wgan_cp.json --experiment_name wgan_cp
 
 # Train WGAN with gradient penalty
 python train.py --config configs/gan/wgan_gp.json --experiment_name wgan_gp
+
+# Train GAN with R1 penalty
+python train.py --config configs/gan/r1gan.json --experiment_name r1gan
 
 # Train VAE
 python train.py --config configs/vae/vae.json --experiment_name vae
