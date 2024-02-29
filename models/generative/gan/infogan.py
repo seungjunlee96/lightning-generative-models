@@ -91,7 +91,7 @@ class Generator(nn.Module):
         input = torch.cat(
             [z, categorical_c, continuous_c],
             dim=1,
-        ).unsqueeze(-1).unsqueeze(-1)
+        ).unsqueeze(-1).unsqueeze(-1).to(self.device)
         return self.model(input)
 
     def generate_codes(self, batch_size: int = 1, transition: bool = False) -> Tuple[Tensor, Tensor, Tensor]:
@@ -226,6 +226,7 @@ class InfoGAN(pl.LightningModule):
         latent_dim: int,
         categorical_code_dim: int,
         continuous_code_dim: int,
+        lambda_mi: float,
         lr: float,
         b1: float,
         b2: float,
@@ -406,10 +407,11 @@ class InfoGAN(pl.LightningModule):
         loss_continuous = F.mse_loss(continuous_c, Q_fake_continuous)
         # epsilon = (continuous_c - Q_continuous_mu) / (Q_continuous_var.exp() + 1e-8)
         # loss_continuous = torch.sum(0.5 * (epsilon ** 2 + 2 * Q_continuous_var - torch.log(1e-8 + 2 * torch.pi)), dim=1).mean()
+        mi_loss = loss_categorical + loss_continuous
 
         # Combine the losses
         d_loss = (d_loss_real + d_loss_fake) / 2
-        d_loss = d_loss + loss_categorical + loss_continuous
+        d_loss = d_loss + self.hparams.lambda_mi * mi_loss
 
         loss_dict = {
             "d_loss": d_loss,
@@ -417,6 +419,7 @@ class InfoGAN(pl.LightningModule):
             "d_loss_fake": d_loss_fake,
             "logits_real": logits_real.mean(),
             "logits_fake": logits_fake.mean(),
+            "d_mi_loss": mi_loss,
         }
         return loss_dict
 
@@ -433,12 +436,12 @@ class InfoGAN(pl.LightningModule):
         mi_loss_continuous = F.mse_loss(Q_fake_continuous, continuous_c)
         mi_loss = mi_loss_categorical + mi_loss_continuous
 
-        g_loss = adv_loss + mi_loss
+        g_loss = adv_loss + self.hparams.lambda_mi * mi_loss
 
         loss_dict = {
             "g_loss": g_loss,
             "adv_loss": adv_loss,
-            "mi_loss": mi_loss,
+            "g_mi_loss": mi_loss,
         }
         return loss_dict
 
