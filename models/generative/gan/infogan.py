@@ -14,6 +14,7 @@ from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 from torchmetrics.image.kid import KernelInceptionDistance
 
+from utils.loss_functions import GaussianNLL
 from utils.visualization import make_grid
 
 
@@ -100,12 +101,6 @@ class Generator(nn.Module):
         if transition:
             assert batch_size % self.categorical_code_dim == 0
 
-            # Continuous codes: Linear interpolation (torch.linspace is still more suitable here)
-            start = torch.rand(1, self.continuous_code_dim, device=self.device)
-            end = torch.rand(1, self.continuous_code_dim, device=self.device)
-            alpha = torch.linspace(0, 1, steps=batch_size, device=self.device).view(-1, 1)
-            continuous_c = start * (1 - alpha) + end * alpha
-
             # Categorical codes: Use torch.arange for a simple transition by stepping through categories
             if batch_size < self.categorical_code_dim:
                 categories = torch.arange(0, self.categorical_code_dim, device=self.device)
@@ -115,11 +110,20 @@ class Generator(nn.Module):
                 step_size = batch_size // self.categorical_code_dim
                 categories = torch.arange(0, self.categorical_code_dim, device=self.device).repeat_interleave(step_size)
                 categorical_c = F.one_hot(categories, num_classes=self.categorical_code_dim).float()
+
+            # Continuous codes: Linear interpolation (torch.linspace is still more suitable here)
+            start = torch.rand(1, self.continuous_code_dim, device=self.device)
+            end = torch.rand(1, self.continuous_code_dim, device=self.device)
+            alpha = torch.linspace(0, 1, steps=batch_size, device=self.device).view(-1, 1)
+            continuous_c = start * (1 - alpha) + end * alpha
+
         else:
-            # Generate random continuous and categorical codes
-            continuous_c = torch.rand(batch_size, self.continuous_code_dim, device=self.device)
+            # Generate random continuous codes
             random_categorical = torch.randint(0, self.categorical_code_dim, (batch_size,), device=self.device)
             categorical_c = F.one_hot(random_categorical, num_classes=self.categorical_code_dim).float()
+
+            # Generate random categorical codes
+            continuous_c = torch.rand(batch_size, self.continuous_code_dim, device=self.device)
 
         return z, categorical_c, continuous_c
 
@@ -159,7 +163,7 @@ class Discriminator(nn.Module):
             nn.Linear(512, 128),
             nn.BatchNorm1d(128),
             nn.LeakyReLU(0.2),
-            nn.Linear(128, categorical_code_dim + continuous_code_dim,),
+            nn.Linear(128, categorical_code_dim + 2 * continuous_code_dim,),
         )
 
         # Initialize weights
@@ -201,12 +205,12 @@ class Discriminator(nn.Module):
         b, c, h, w = features.size()
         features_flat = features.view(b, c, h * w).mean(-1)
         code_pred = self.q_network(features_flat)
-        Q_cat_logits, Q_cont_pred = torch.split(
+        Q_cat_logits, Q_cont_mu, Q_cont_logvar = torch.split(
             code_pred,
-            [self.categorical_code_dim, self.continuous_code_dim],
+            [self.categorical_code_dim, self.continuous_code_dim, self.continuous_code_dim],
             dim=1,
         )
-        return real_fake_output, Q_cat_logits, Q_cont_pred
+        return real_fake_output, Q_cat_logits, Q_cont_mu, Q_cont_logvar
 
 
 class InfoGAN(pl.LightningModule):
@@ -252,6 +256,9 @@ class InfoGAN(pl.LightningModule):
             categorical_code_dim=categorical_code_dim,
             continuous_code_dim=continuous_code_dim,
         )
+
+        self.loss_Q_cat = nn.CrossEntropyLoss()
+        self.loss_Q_cont = GaussianNLL()
 
         if self.metrics:
             self.fid = FrechetInceptionDistance() if "fid" in self.metrics else None
@@ -307,7 +314,7 @@ class InfoGAN(pl.LightningModule):
         x_hat = self.generator(z, categorical_c, continuous_c)
 
         loss_dict = self._calculate_d_loss(x, x_hat, categorical_c, continuous_c)
-        loss_dict.update(self._calculate_g_loss(x_hat, categorical_c, continuous_c))
+        loss_dict.update(self._calculate_g_loss(x_hat))
 
         self.log(
             "val_loss",
@@ -395,18 +402,15 @@ class InfoGAN(pl.LightningModule):
         categorical_c: Tensor,
         continuous_c: Tensor,
     ) -> Dict[str, Tensor]:
-        logits_real, _, _ = self.discriminator(x)
+        logits_real, _, _, _ = self.discriminator(x)
         d_loss_real = bce_with_logits(logits_real, torch.ones_like(logits_real))
 
-        logits_fake, Q_fake_logits, Q_fake_continuous = self.discriminator(x_hat.detach())
+        logits_fake, Q_fake_logits, Q_fake_cont_mu, Q_fake_cont_logvar = self.discriminator(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
-        # Auxiliary Loss for categorical codes (cross-entropy)
-        loss_categorical = F.cross_entropy(Q_fake_logits, categorical_c.argmax(dim=1))
+        loss_categorical = self.loss_Q_cat(Q_fake_logits, categorical_c)
+        loss_continuous = self.loss_Q_cont(continuous_c, Q_fake_cont_mu, Q_fake_cont_logvar)
 
-        loss_continuous = F.mse_loss(continuous_c, Q_fake_continuous)
-        # epsilon = (continuous_c - Q_continuous_mu) / (Q_continuous_var.exp() + 1e-8)
-        # loss_continuous = torch.sum(0.5 * (epsilon ** 2 + 2 * Q_continuous_var - torch.log(1e-8 + 2 * torch.pi)), dim=1).mean()
         mi_loss = loss_categorical + loss_continuous
 
         # Combine the losses
@@ -419,29 +423,22 @@ class InfoGAN(pl.LightningModule):
             "d_loss_fake": d_loss_fake,
             "logits_real": logits_real.mean(),
             "logits_fake": logits_fake.mean(),
-            "d_mi_loss": mi_loss,
+            "mi_loss": mi_loss,
         }
         return loss_dict
 
     def _calculate_g_loss(
         self,
         x_hat: Tensor,
-        categorical_c: Tensor,
-        continuous_c: Tensor,
     ) -> Dict[str, Tensor]:
-        logits_fake, Q_fake_logits, Q_fake_continuous = self.discriminator(x_hat)
+        logits_fake, _, _, _ = self.discriminator(x_hat)
         adv_loss = bce_with_logits(logits_fake, torch.ones_like(logits_fake))
 
-        mi_loss_categorical = F.cross_entropy(Q_fake_logits, categorical_c.argmax(dim=1))
-        mi_loss_continuous = F.mse_loss(Q_fake_continuous, continuous_c)
-        mi_loss = mi_loss_categorical + mi_loss_continuous
-
-        g_loss = adv_loss + self.hparams.lambda_mi * mi_loss
+        g_loss = adv_loss
 
         loss_dict = {
             "g_loss": g_loss,
             "adv_loss": adv_loss,
-            "g_mi_loss": mi_loss,
         }
         return loss_dict
 
