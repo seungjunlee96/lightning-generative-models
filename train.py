@@ -13,10 +13,10 @@ from data.datamodule import DataModule
 from utils.callbacks import LogArtifactCallback
 from utils.lightning_utils import configure_num_workers, configure_strategy
 from utils.load_model import load_config, load_model
+from utils.seed import seed_everything
 
 # Set Constants
-SEED = 10
-pl.seed_everything(SEED)
+seed_everything(seed=10, workers=True, cuda_deterministic=True)
 EXPERIMENTS_DIR = "experiments"
 EXPERIMENT_TIME = datetime.now().strftime("%Y-%m-%d_%H:%M")
 
