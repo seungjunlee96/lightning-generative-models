@@ -295,7 +295,7 @@ class InfoGAN(pl.LightningModule):
 
         # Train Generator
         else:
-            loss_dict = self._calculate_g_loss(x_hat, categorical_c, continuous_c)
+            loss_dict = self._calculate_g_loss(x_hat)
             g_optim.zero_grad(set_to_none=True)
             self.manual_backward(loss_dict["g_loss"])
             g_optim.step()
@@ -427,10 +427,7 @@ class InfoGAN(pl.LightningModule):
         }
         return loss_dict
 
-    def _calculate_g_loss(
-        self,
-        x_hat: Tensor,
-    ) -> Dict[str, Tensor]:
+    def _calculate_g_loss(self, x_hat: Tensor) -> Dict[str, Tensor]:
         logits_fake, _, _, _ = self.discriminator(x_hat)
         adv_loss = bce_with_logits(logits_fake, torch.ones_like(logits_fake))
 
