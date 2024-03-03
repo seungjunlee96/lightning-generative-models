@@ -1,3 +1,5 @@
+from typing import List
+
 import torch
 from torch import Tensor
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
@@ -44,6 +46,7 @@ class R1GAN(DCGAN):
         r1_penalty: float = 10.0,
         ckpt_path: str = "",
         calculate_metrics: bool = False,
+        metrics: List[str] = [],
     ) -> None:
         super().__init__(
             img_channels=img_channels,
@@ -55,6 +58,7 @@ class R1GAN(DCGAN):
             weight_decay=weight_decay,
             ckpt_path=ckpt_path,
             calculate_metrics=calculate_metrics,
+            metrics=metrics,
         )
         self.save_hyperparameters()
 

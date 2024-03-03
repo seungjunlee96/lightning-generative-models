@@ -1,3 +1,5 @@
+from typing import List
+
 import torch
 from torch import Tensor
 
@@ -32,6 +34,8 @@ class LSGAN(DCGAN):
         b2: float = 0.999,
         weight_decay: float = 1e-5,
         ckpt_path: str = "",
+        calculate_metrics: bool = False,
+        metrics: List[str] = [],
     ) -> None:
         super(LSGAN, self).__init__(
             img_channels=img_channels,
@@ -42,6 +46,8 @@ class LSGAN(DCGAN):
             b2=b2,
             weight_decay=weight_decay,
             ckpt_path=ckpt_path,
+            calculate_metrics=calculate_metrics,
+            metrics=metrics,
         )
 
     def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
