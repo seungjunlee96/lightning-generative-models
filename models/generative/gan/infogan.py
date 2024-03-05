@@ -1,12 +1,12 @@
 import os
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import wandb
-from torch import List, Tensor
+from torch import Tensor
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
 from torch.optim import Adam
 from torchinfo import summary
@@ -33,6 +33,7 @@ def initialize_weights(model: nn.Module):
 class Generator(nn.Module):
     def __init__(
         self,
+        img_size: int,
         img_channels: int,
         latent_dim: int,
         categorical_code_dim: int,
@@ -44,13 +45,25 @@ class Generator(nn.Module):
         self.continuous_code_dim = continuous_code_dim
         code_dim = categorical_code_dim + continuous_code_dim
 
-        self.model = nn.Sequential(
-            self._block(latent_dim + code_dim, 1024, 4, 1, 0),
-            self._block(1024, 512, 4, 2, 1),
-            self._block(512, 256, 4, 2, 1),
-            self._block(256, 128, 4, 2, 1),
-            self._block(128, img_channels, 4, 2, 1, final_layer=True),
-        )
+        if img_size == 64:
+            # CelebA
+            self.model = nn.Sequential(
+                self._block(latent_dim + code_dim, 1024, 4, 1, 0),
+                self._block(1024, 512, 4, 2, 1),
+                self._block(512, 256, 4, 2, 1),
+                self._block(256, 128, 4, 2, 1),
+                self._block(128, img_channels, 4, 2, 1, final_layer=True),
+            )
+        elif img_size == 28:
+            # MNIST
+            self.model = nn.Sequential(
+                self._block(latent_dim + code_dim, 256, 7, 1, 0),
+                self._block(256, 128, 4, 2, 1),
+                self._block(128, img_channels, 4, 2, 1, final_layer=True),
+            )
+
+        else:
+            raise NotImplementedError
 
         # Initialize weights
         self.apply(initialize_weights)
@@ -140,6 +153,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     def __init__(
         self,
+        img_size: int,
         img_channels: int,
         categorical_code_dim: int,
         continuous_code_dim: int,
@@ -148,19 +162,32 @@ class Discriminator(nn.Module):
         self.categorical_code_dim = categorical_code_dim
         self.continuous_code_dim = continuous_code_dim
 
-        self.feature_extractor = nn.Sequential(
-            self._block(img_channels, 64, 4, 2, 1, use_bn=False),
-            self._block(64, 128, 4, 2, 1, use_bn=True),
-            self._block(128, 256, 4, 2, 1, use_bn=True),
-            self._block(256, 512, 4, 2, 1, use_bn=True),
-        )
+        if img_size == 64:
+            self.feature_extractor = nn.Sequential(
+                self._block(img_channels, 64, 4, 2, 1, use_bn=False),
+                self._block(64, 128, 4, 2, 1, use_bn=True),
+                self._block(128, 256, 4, 2, 1, use_bn=True),
+                self._block(256, 512, 4, 2, 1, use_bn=True),
+            )
+            feature_dim = 512
+
+        elif img_size == 28:
+            self.feature_extractor = nn.Sequential(
+                self._block(img_channels, 64, 4, 2, 1, use_bn=False),
+                self._block(64, 128, 4, 2, 1, use_bn=True),
+                self._block(128, 256, 7, 1, 0),
+            )
+            feature_dim = 256
+
+        else:
+            raise NotImplementedError
 
         # Final layer for real vs fake classification
-        self.final_layer = self._block(512, 1, 4, 1, 0, use_bn=False, final_layer=True)
+        self.final_layer = nn.Linear(feature_dim, 1)
 
         # Auxiliary layer for Q network to predict latent codes
         self.q_network = nn.Sequential(
-            nn.Linear(512, 128),
+            nn.Linear(feature_dim, 128),
             nn.BatchNorm1d(128),
             nn.LeakyReLU(0.2),
             nn.Linear(128, categorical_code_dim + 2 * continuous_code_dim,),
@@ -200,10 +227,9 @@ class Discriminator(nn.Module):
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
         features = self.feature_extractor(x)
-        real_fake_output = self.final_layer(features).squeeze()
-
         b, c, h, w = features.size()
         features_flat = features.view(b, c, h * w).mean(-1)
+        real_fake_output = self.final_layer(features_flat)
         code_pred = self.q_network(features_flat)
         Q_cat_logits, Q_cont_mu, Q_cont_logvar = torch.split(
             code_pred,
@@ -225,16 +251,17 @@ class InfoGAN(pl.LightningModule):
 
     def __init__(
         self,
-        img_channels: int,
-        img_size: int,
-        latent_dim: int,
-        categorical_code_dim: int,
-        continuous_code_dim: int,
-        lambda_mi: float,
-        lr: float,
-        b1: float,
-        b2: float,
-        weight_decay: float,
+        img_channels: int = 3,
+        img_size: int = 64,
+        latent_dim: int = 100,
+        categorical_code_dim: int = 10,
+        continuous_code_dim: int = 2,
+        lambda_cat: float = 1,
+        lambda_cont: float = 0.1,
+        lr: float = 0.0002,
+        b1: float = 0.5,
+        b2: float = 0.99,
+        weight_decay: float = 1e-5,
         ckpt_path: str = "",
         calculate_metrics: bool = False,
         metrics: List[str] = [],
@@ -246,12 +273,14 @@ class InfoGAN(pl.LightningModule):
         self.metrics = metrics
 
         self.generator = Generator(
+            img_size=img_size,
             img_channels=img_channels,
             latent_dim=latent_dim,
             categorical_code_dim=categorical_code_dim,
             continuous_code_dim=continuous_code_dim,
         )
         self.discriminator = Discriminator(
+            img_size=img_size,
             img_channels=img_channels,
             categorical_code_dim=categorical_code_dim,
             continuous_code_dim=continuous_code_dim,
@@ -276,29 +305,40 @@ class InfoGAN(pl.LightningModule):
 
         self.summary()
 
-    def forward(self, z: Tensor = None, c: Tensor = None) -> Tensor:
-        return self.generator(z, c)
+    def forward(
+        self,
+        z: Tensor,
+        categorical_c: Tensor,
+        continuous_c: Tensor,
+    ) -> Tensor:
+        return self.generator(z, categorical_c, continuous_c)
 
     def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
         batch_size = x.size(0)
         z, categorical_c, continuous_c = self.generator.generate_codes(batch_size)
         x_hat = self.generator(z, categorical_c, continuous_c)
-        d_optim, g_optim = self.optimizers()
+        d_optim, g_optim, q_optim = self.optimizers()
 
         # Train Discriminator
-        if self.global_step % 2 == 0:
+        if self.global_step % 3 == 0:
             loss_dict = self._calculate_d_loss(x, x_hat, categorical_c, continuous_c)
             d_optim.zero_grad(set_to_none=True)
             self.manual_backward(loss_dict["d_loss"])
             d_optim.step()
 
         # Train Generator
-        else:
-            loss_dict = self._calculate_g_loss(x_hat)
+        elif self.global_step % 3 == 1:
+            loss_dict = self._calculate_g_loss(x_hat, categorical_c, continuous_c)
             g_optim.zero_grad(set_to_none=True)
             self.manual_backward(loss_dict["g_loss"])
             g_optim.step()
+
+        else:
+            loss_dict = self._calculate_mi_loss(x_hat, categorical_c, continuous_c)
+            q_optim.zero_grad(set_to_none=True)
+            self.manual_backward(loss_dict["mi_loss"])
+            q_optim.step()
 
         self.log_dict(
             loss_dict,
@@ -314,7 +354,7 @@ class InfoGAN(pl.LightningModule):
         x_hat = self.generator(z, categorical_c, continuous_c)
 
         loss_dict = self._calculate_d_loss(x, x_hat, categorical_c, continuous_c)
-        loss_dict.update(self._calculate_g_loss(x_hat))
+        loss_dict.update(self._calculate_g_loss(x_hat, categorical_c, continuous_c))
 
         self.log(
             "val_loss",
@@ -386,14 +426,23 @@ class InfoGAN(pl.LightningModule):
         d_optim = Adam(
             self.discriminator.parameters(),
             lr=self.hparams.lr,
+            betas=(self.hparams.b1, self.hparams.b2),
             weight_decay=self.hparams.weight_decay,
         )
         g_optim = Adam(
             self.generator.parameters(),
             lr=self.hparams.lr,
+            betas=(self.hparams.b1, self.hparams.b2),
             weight_decay=self.hparams.weight_decay,
         )
-        return [d_optim, g_optim], []
+        q_optim = Adam(
+            list(self.discriminator.parameters()) + list(self.generator.parameters()),
+            lr=self.hparams.lr,
+            betas=(self.hparams.b1, self.hparams.b2),
+            weight_decay=self.hparams.weight_decay,
+        )
+
+        return [d_optim, g_optim, q_optim], []
 
     def _calculate_d_loss(
         self,
@@ -408,14 +457,8 @@ class InfoGAN(pl.LightningModule):
         logits_fake, Q_fake_logits, Q_fake_cont_mu, Q_fake_cont_logvar = self.discriminator(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
-        loss_categorical = self.loss_Q_cat(Q_fake_logits, categorical_c)
-        loss_continuous = self.loss_Q_cont(continuous_c, Q_fake_cont_mu, Q_fake_cont_logvar)
-
-        mi_loss = loss_categorical + loss_continuous
-
         # Combine the losses
         d_loss = (d_loss_real + d_loss_fake) / 2
-        d_loss = d_loss + self.hparams.lambda_mi * mi_loss
 
         loss_dict = {
             "d_loss": d_loss,
@@ -423,20 +466,36 @@ class InfoGAN(pl.LightningModule):
             "d_loss_fake": d_loss_fake,
             "logits_real": logits_real.mean(),
             "logits_fake": logits_fake.mean(),
-            "mi_loss": mi_loss,
         }
         return loss_dict
 
-    def _calculate_g_loss(self, x_hat: Tensor) -> Dict[str, Tensor]:
-        logits_fake, _, _, _ = self.discriminator(x_hat)
+    def _calculate_g_loss(self, x_hat: Tensor, categorical_c: Tensor, continuous_c: Tensor) -> Dict[str, Tensor]:
+        logits_fake, Q_fake_logits, Q_fake_cont_mu, Q_fake_cont_logvar = self.discriminator(x_hat)
         adv_loss = bce_with_logits(logits_fake, torch.ones_like(logits_fake))
 
         g_loss = adv_loss
 
         loss_dict = {
             "g_loss": g_loss,
-            "adv_loss": adv_loss,
         }
+        return loss_dict
+
+    def _calculate_mi_loss(self, x_hat: Tensor, categorical_c: Tensor, continuous_c: Tensor) -> Dict[str, Tensor]:
+        _, Q_fake_logits, Q_fake_cont_mu, Q_fake_cont_logvar = self.discriminator(x_hat)
+        loss_categorical = self.loss_Q_cat(Q_fake_logits, categorical_c)
+        loss_continuous = self.loss_Q_cont(continuous_c, Q_fake_cont_mu, Q_fake_cont_logvar)
+
+        mi_loss = (
+            self.hparams.lambda_cat * loss_categorical
+            + self.hparams.lambda_cont * loss_continuous
+        )
+
+        loss_dict = {
+            "mi_loss": mi_loss,
+            "mi_categorical": loss_categorical,
+            "mi_continuous": loss_continuous,
+        }
+
         return loss_dict
 
     @torch.no_grad()
