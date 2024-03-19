@@ -1,17 +1,14 @@
 {
     "model": {
-        "name": "WGAN",
+        "name": "DCGAN",
         "args": {
             "img_size": 28,
             "img_channels": 1,
-            "latent_dim": 128,
-            "lr": 0.00005,
+            "latent_dim": 100,
+            "lr": 0.0002,
             "b1": 0.5,
             "b2": 0.999,
-            "weight_decay": 0,
-            "n_critic": 5,
-            "clip_value": 0.01,
-            "constraint_method": "clip",
+            "weight_decay": 1e-5,
             "ckpt_path": ""
         }
     },
@@ -19,7 +16,7 @@
         "name": "MNIST",
         "img_size": 28,
         "img_channels": 1,
-        "batch_size": 64,
+        "batch_size": 128,
         "train_val_split": 0.8
     }
 }

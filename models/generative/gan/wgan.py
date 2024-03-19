@@ -1,7 +1,8 @@
-from typing import List
+from typing import List, Tuple
 
 import torch
 from torch import Tensor
+from torch.optim import Adam, RMSprop
 
 from models.generative.gan.dcgan import DCGAN
 
@@ -21,10 +22,11 @@ class WGAN(DCGAN):
         img_channels: int = 3,
         img_size: int = 64,
         latent_dim: int = 100,
-        lr: float = 1e-4,
-        weight_decay: float = 1e-5,
+        lr: float = 0.00005,
+        weight_decay: float = 0,
         b1: float = 0.5,
-        b2: float = 0.999,
+        b2: float = 0.9,
+        n_critic: int = 5,
         clip_value: float = 0.01,
         grad_penalty: float = 10,
         constraint_method: str = "gp",
@@ -51,6 +53,35 @@ class WGAN(DCGAN):
         self.clip_value = clip_value
         self.grad_penalty = grad_penalty
         self.constraint_method = constraint_method
+        self.save_hyperparameters()
+
+    def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
+        x, _ = batch
+        x_hat = self.generator.random_sample(x.size(0))
+        d_optim, g_optim = self.optimizers()
+
+        # Train Discriminator
+        if (self.global_step + 1) % (self.hparams.n_critic + 1) != 0:
+            loss_dict = self._calculate_d_loss(x, x_hat)
+            d_optim.zero_grad(set_to_none=True)
+            if self.hparams.constraint_method == "clip":
+                self._weight_clipping()
+            self.manual_backward(loss_dict["d_loss"])
+            d_optim.step()
+
+        # Train Generator
+        else:
+            loss_dict = self._calculate_g_loss(x_hat)
+            g_optim.zero_grad(set_to_none=True)
+            self.manual_backward(loss_dict["g_loss"])
+            g_optim.step()
+
+        self.log_dict(
+            loss_dict,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
 
     def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
         d_loss_real = self.discriminator(x).mean()
@@ -69,9 +100,6 @@ class WGAN(DCGAN):
                 gradient_penalty = self._calculate_gradient_penalty(x, x_hat)
                 d_loss += gradient_penalty
                 loss_dict["gradient_penalty"] = gradient_penalty
-
-            elif self.hparams.constraint_method == "clip":
-                self._weight_clipping()
 
         return loss_dict
 
@@ -130,3 +158,32 @@ class WGAN(DCGAN):
         """
         for param in self.discriminator.parameters():
             param.data.clamp_(-self.hparams.clip_value, self.hparams.clip_value)
+
+    def configure_optimizers(self):
+        if self.hparams.constraint_method == "clip":
+            # Empirically the authors recommended RMSProp optimizer on the critic,
+            # rather than a momentum based optimizer such as Adam which could cause instability in the model training.
+            d_optim = RMSprop(
+                self.discriminator.parameters(),
+                lr=self.hparams.lr,
+            )
+            g_optim = RMSprop(
+                self.generator.parameters(),
+                lr=self.hparams.lr,
+            )
+
+        elif self.hparams.constraint_method == "gp":
+            d_optim = Adam(
+                self.discriminator.parameters(),
+                lr=self.hparams.lr,
+                betas=(self.hparams.b1, self.hparams.b2),
+                weight_decay=self.hparams.weight_decay,
+            )
+            g_optim = Adam(
+                self.generator.parameters(),
+                lr=self.hparams.lr,
+                betas=(self.hparams.b1, self.hparams.b2),
+                weight_decay=self.hparams.weight_decay,
+            )
+
+        return [d_optim, g_optim], []

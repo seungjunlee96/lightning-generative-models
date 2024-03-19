@@ -1,15 +1,5 @@
-"""
-DCGAN (Deep Convolutional Generative Adversarial Networks) Architecture:
-
-DCGANs are a type of GAN that use convolutional and convolutional-transpose layers
-in the discriminator and generator, respectively. They introduced several architectural
-guidelines to stabilize the training of GANs, resulting in higher quality image generation.
-
-Reference: Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks.
-- https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
-"""
 import os
-from typing import Dict, Tuple
+from typing import Tuple
 
 import pytorch_lightning as pl
 import torch
@@ -41,30 +31,19 @@ def initialize_weights(model: nn.Module):
 class Generator(nn.Module):
     def __init__(
         self,
-        img_size: int,
         img_channels: int,
         latent_dim: int,
     ) -> None:
         super(Generator, self).__init__()
         self.latent_dim = latent_dim
 
-        if img_size == 64:
-            self.model = nn.Sequential(
-                self._block(latent_dim, 1024, 4, 1, 0),
-                self._block(1024, 512, 4, 2, 1),
-                self._block(512, 256, 4, 2, 1),
-                self._block(256, 128, 4, 2, 1),
-                self._block(128, img_channels, 4, 2, 1, final_layer=True),
-            )
-
-        elif img_size == 28:
-            # MNIST
-            self.model = nn.Sequential(
-                self._block(latent_dim, 256, 7, 1, 0),
-                self._block(256, 128, 4, 2, 1),
-                self._block(128, img_channels, 4, 2, 1, final_layer=True),
-            )
-
+        self.model = nn.Sequential(
+            self._block(latent_dim, 1024, 4, 1, 0),
+            self._block(1024, 512, 4, 2, 1),
+            self._block(512, 256, 4, 2, 1),
+            self._block(256, 128, 4, 2, 1),
+            self._block(128, img_channels, 4, 2, 1, final_layer=True),
+        )
         self.model = initialize_weights(self.model)
 
     @staticmethod
@@ -110,29 +89,20 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     def __init__(
         self,
-        img_size: int,
         img_channels: int,
+        num_classes: int,
     ) -> None:
         super(Discriminator, self).__init__()
-
-        if img_size == 64:
-            self.model = nn.Sequential(
-                self._block(img_channels, 64, 4, 2, 1, use_bn=False),
-                self._block(64, 128, 4, 2, 1, use_bn=True),
-                self._block(128, 256, 4, 2, 1, use_bn=True),
-                self._block(256, 512, 4, 2, 1, use_bn=True),
-                self._block(512, 1, 4, 1, 0, use_bn=False, final_layer=True),
-            )
-
-        elif img_size == 28:
-            self.model = nn.Sequential(
-                self._block(img_channels, 64, 4, 2, 1, use_bn=False),
-                self._block(64, 128, 4, 2, 1, use_bn=True),
-                self._block(128, 256, 7, 1, 0),
-                self._block(256, 1, 1, 1, 0, use_bn=False, final_layer=True),
-            )
+        self.model = nn.Sequential(
+            self._block(img_channels, 64, 4, 2, 1, use_bn=False),
+            self._block(64, 128, 4, 2, 1, use_bn=True),
+            self._block(128, 256, 4, 2, 1, use_bn=True),
+            self._block(256, 512, 4, 2, 1, use_bn=True),
+        )
 
         self.model = initialize_weights(self.model)
+        self.classifier = nn.Linear(512, num_classes)  # For classifying real images into categories
+        self.discriminator = self._block(512, 1, 4, 1, 0, use_bn=False, final_layer=True)  # For distinguishing real vs. fake images
 
     @staticmethod
     def _block(
@@ -163,19 +133,25 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True) if not final_layer else nn.Identity(),
         )
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self.model(x).squeeze()
+    def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
+        features = self.model(x)
+        b, c, h, w = features.size()
+        features_gap = features.reshape(b, c, h * w).mean(-1)
+
+        real_fake_logits = self.discriminator(features).sqeeuze()
+        class_logits = self.classifier(features_gap)
+        return real_fake_logits, class_logits
 
 
-class DCGAN(pl.LightningModule):
+class SGAN(pl.LightningModule):
     """
-    Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks
-    In recent years, supervised learning with convolutional networks (CNNs) has seen huge adoption in computer vision applications.
-    Comparatively, unsupervised learning with CNNs has received less attention.
-    In this work we hope to help bridge the gap between the success of CNNs for supervised learning and unsupervised learning.
-    We introduce a class of CNNs called deep convolutional generative adversarial networks (DCGANs), that have certain architectural constraints, and demonstrate that they are a strong candidate for unsupervised learning.
-    Training on various image datasets, we show convincing evidence that our deep convolutional adversarial pair learns a hierarchy of representations from object parts to scenes in both the generator and discriminator.
-    Additionally, we use the learned features for novel tasks - demonstrating their applicability as general image representations.
+    Semi-supervised Generative Adversarial Networks (SGAN)
+    - Paper: https://arxiv.org/pdf/1606.01583.pdf
+    - Extended Generative Adversarial Networks (GANs) to semi-supervised learning by modifying the discriminator to output class labels.
+    - Trained a generative model (G) and a discriminator (D) on a dataset with inputs from one of N classes.
+    - During training, D predicts the class of the input from N+1 options, the extra class representing outputs from G.
+    - Demonstrated that this approach creates a more data-efficient classifier.
+    - Proved capability to generate higher quality samples compared to traditional GANs.
     """
 
     def __init__(
@@ -189,21 +165,18 @@ class DCGAN(pl.LightningModule):
         weight_decay: float,
         ckpt_path: str = "",
         calculate_metrics: bool = False,
-        metrics: List[str] = [],
     ) -> None:
         super(DCGAN, self).__init__()
         self.save_hyperparameters()
         self.automatic_optimization = False
         self.calculate_metrics = calculate_metrics
-        self.metrics = metrics
 
-        self.generator = Generator(img_size=img_size, img_channels=img_channels, latent_dim=latent_dim)
-        self.discriminator = Discriminator(img_size=img_size, img_channels=img_channels)
+        self.generator = Generator(img_channels=img_channels, latent_dim=latent_dim)
+        self.discriminator = Discriminator(img_channels=img_channels)
 
-        if self.metrics:
-            self.fid = FrechetInceptionDistance() if "fid" in self.metrics else None
-            self.kid = KernelInceptionDistance(subset_size=100) if "kid" in self.metrics else None
-            self.inception_score = InceptionScore() if "is" in self.metrics else None
+        self.fid = FrechetInceptionDistance()
+        self.kid = KernelInceptionDistance(subset_size=100)
+        self.inception_score = InceptionScore()
 
         if os.path.exists(ckpt_path):
             self.load_from_checkpoint(ckpt_path)
@@ -215,7 +188,7 @@ class DCGAN(pl.LightningModule):
         return self.generator(z)
 
     def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
-        x, _ = batch
+        x, labels = batch
         x_hat = self.generator.random_sample(x.size(0))
         d_optim, g_optim = self.optimizers()
 
@@ -241,7 +214,7 @@ class DCGAN(pl.LightningModule):
         )
 
     def validation_step(self, batch: Tuple[Tensor, Tensor]) -> None:
-        x, _ = batch
+        x, labels = batch
         x_hat = self.generator.random_sample(x.size(0))
 
         loss_dict = self._calculate_d_loss(x, x_hat)
@@ -259,19 +232,18 @@ class DCGAN(pl.LightningModule):
             self.update_metrics(x, x_hat)
 
     def on_validation_epoch_end(self):
-        if self.metrics:
-            metrics = self.compute_metrics()
+        metrics = self.compute_metrics()
 
-            self.log_dict(
-                metrics,
-                prog_bar=True,
-                logger=True,
-                sync_dist=torch.cuda.device_count() > 1,
-            )
+        self.log_dict(
+            metrics,
+            prog_bar=True,
+            logger=True,
+            sync_dist=torch.cuda.device_count() > 1,
+        )
 
-            self.fid.reset() if "fid" in self.metrics else None
-            self.kid.reset() if "kid" in self.metrics else None
-            self.inception_score = InceptionScore().to(self.device) if "is" in self.metrics else None
+        self.fid.reset()
+        self.kid.reset()
+        self.inception_score = InceptionScore().to(self.device)
 
     def update_metrics(self, x, x_hat):
         # Update metrics with real and generated images
@@ -288,21 +260,18 @@ class DCGAN(pl.LightningModule):
             .byte()
         )
 
-        if "fid" in self.metrics:
-            self.fid.update(x, real=True)
-            self.fid.update(x_hat, real=False)
+        self.fid.update(x, real=True)
+        self.fid.update(x_hat, real=False)
 
-        if "kid" in self.metrics:
-            self.kid.update(x, real=True)
-            self.kid.update(x_hat, real=False)
+        self.kid.update(x, real=True)
+        self.kid.update(x_hat, real=False)
 
-        if "is" in self.metrics:
-            self.inception_score.update(x_hat)
+        self.inception_score.update(x_hat)
 
-    def compute_metrics(self) -> Dict[str, Tensor]:
-        fid_score = self.fid.compute() if "fid" in self.metrics else None
-        kid_mean, kid_std = self.kid.compute() if "kid" in self.metrics else None, None
-        is_mean, is_std = self.inception_score.compute() if "is" in self.metrics else None, None
+    def compute_metrics(self):
+        fid_score = self.fid.compute()
+        kid_mean, kid_std = self.kid.compute()
+        is_mean, is_std = self.inception_score.compute()
 
         metrics = {
             "fid_score": fid_score,
@@ -317,32 +286,34 @@ class DCGAN(pl.LightningModule):
         d_optim = Adam(
             self.discriminator.parameters(),
             lr=self.hparams.lr,
-            betas=(self.hparams.b1, self.hparams.b2),
             weight_decay=self.hparams.weight_decay,
         )
         g_optim = Adam(
             self.generator.parameters(),
             lr=self.hparams.lr,
-            betas=(self.hparams.b1, self.hparams.b2),
             weight_decay=self.hparams.weight_decay,
         )
         return [d_optim, g_optim], []
 
-    def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
-        logits_real = self.discriminator(x)
+    def _calculate_d_loss(self, x: Tensor, real_labels: Tensor, x_hat: Tensor) -> Tensor:
+        logits_real, class_logits = self.discriminator(x)
         d_loss_real = bce_with_logits(logits_real, torch.ones_like(logits_real))
 
-        logits_fake = self.discriminator(x_hat.detach())
+        logits_fake, _ = self.discriminator(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
         d_loss = (d_loss_real + d_loss_fake) / 2
+
+        # Apply classification loss only for real labeled images
+        class_loss = nn.CrossEntropyLoss()(class_logits, real_labels)
 
         loss_dict = {
             "d_loss": d_loss,
             "d_loss_real": d_loss_real,
             "d_loss_fake": d_loss_fake,
             "logits_real": logits_real.mean(),
-            "logits_fake": logits_fake.mean(),
+            "logits_fake": torch.sigmoid(logits_fake.mean()),
+            "class_loss": class_loss,
         }
         return loss_dict
 
