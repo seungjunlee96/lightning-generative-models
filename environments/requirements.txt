@@ -19,3 +19,4 @@ ipykernel
 einops
 ema_pytorch
 scipy
+gdown
