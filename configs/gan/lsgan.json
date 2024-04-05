@@ -4,8 +4,8 @@
         "args": {
             "img_channels": 3,
             "img_size": 64,
-            "latent_dim": 100,
-            "lr": 0.0001,
+            "latent_dim": 1024,
+            "lr": 0.0002,
             "b1": 0.5,
             "b2": 0.999,
             "weight_decay": 1e-5,
