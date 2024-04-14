@@ -64,8 +64,6 @@ class WGAN(DCGAN):
         if (self.global_step + 1) % (self.hparams.n_critic + 1) != 0:
             loss_dict = self._calculate_d_loss(x, x_hat)
             d_optim.zero_grad(set_to_none=True)
-            if self.hparams.constraint_method == "clip":
-                self._weight_clipping()
             self.manual_backward(loss_dict["d_loss"])
             d_optim.step()
 
@@ -101,11 +99,19 @@ class WGAN(DCGAN):
                 d_loss += gradient_penalty
                 loss_dict["gradient_penalty"] = gradient_penalty
 
+            elif self.hparams.constraint_method == "clip":
+                self._weight_clipping()
+
+            else:
+                raise ValueError(
+                    f"{self.hparams.constraint_method} not expected, "
+                    "constraint method must be either 'gp' for gradient penalty "
+                    "or 'clip' for weight clipping."
+                )
         return loss_dict
 
     def _calculate_g_loss(self, x_hat: Tensor) -> Tensor:
         g_loss = -self.discriminator(x_hat).mean()
-
         loss_dict = {"g_loss": g_loss}
         return loss_dict
 
@@ -157,7 +163,10 @@ class WGAN(DCGAN):
         A crude way to enforce the 1-Lipschitz constraint on the critic.
         """
         for param in self.discriminator.parameters():
-            param.data.clamp_(-self.hparams.clip_value, self.hparams.clip_value)
+            param.data.clamp_(
+                -self.hparams.clip_value,
+                self.hparams.clip_value,
+            )
 
     def configure_optimizers(self):
         if self.hparams.constraint_method == "clip":
