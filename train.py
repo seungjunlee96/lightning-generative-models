@@ -16,7 +16,7 @@ from utils.load_model import load_config, load_model
 from utils.seed import seed_everything
 
 # Set Constants
-seed_everything(seed=10, workers=True, cuda_deterministic=True)
+seed_everything(seed=10, workers=True)
 EXPERIMENTS_DIR = "experiments"
 EXPERIMENT_TIME = datetime.now().strftime("%Y-%m-%d_%H:%M")
 
