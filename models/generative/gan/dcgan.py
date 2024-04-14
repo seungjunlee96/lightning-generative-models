@@ -197,8 +197,15 @@ class DCGAN(pl.LightningModule):
         self.calculate_metrics = calculate_metrics
         self.metrics = metrics
 
-        self.generator = Generator(img_size=img_size, img_channels=img_channels, latent_dim=latent_dim)
-        self.discriminator = Discriminator(img_size=img_size, img_channels=img_channels)
+        self.generator = Generator(
+            img_size=img_size,
+            img_channels=img_channels,
+            latent_dim=latent_dim,
+        )
+        self.discriminator = Discriminator(
+            img_size=img_size,
+            img_channels=img_channels,
+        )
 
         if self.metrics:
             self.fid = FrechetInceptionDistance() if "fid" in self.metrics else None
