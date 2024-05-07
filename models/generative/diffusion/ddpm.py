@@ -15,11 +15,11 @@ from ema_pytorch import EMA
 from torch import nn
 from torch.cuda.amp import autocast
 from torchinfo import summary
+from torchvision.utils import make_grid
 from tqdm.auto import tqdm
 
 from models.modules.attend import Attend
 from utils.lightning_utils import is_master_process
-from utils.visualization import make_grid
 
 # constants
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
@@ -368,7 +368,9 @@ class Unet(nn.Module):
                         block_klass(dim_in, dim_in, time_emb_dim=time_dim),
                         block_klass(dim_in, dim_in, time_emb_dim=time_dim),
                         attn_klass(
-                            dim_in, dim_head=layer_attn_dim_head, heads=layer_attn_heads
+                            dim_in,
+                            dim_head=layer_attn_dim_head,
+                            heads=layer_attn_heads,
                         ),
                         Downsample(dim_in, dim_out)
                         if not is_last
@@ -1028,16 +1030,12 @@ class DDPM(pl.LightningModule):
     def _log_sample(self):
         # Log sampled images if it's the first batch of the epoch
         self.ema.ema_model.eval()
-        sample_images = (
-            self.ema.ema_model
-            .sample(batch_size=16)
-            .mul_(255)
-            .clamp(0, 255)
-            .byte()
-            .detach()
-            .cpu()
+        sample_images = self.ema.ema_model.sample(batch_size=64)
+        fig = make_grid(
+            tensor=sample_images,
+            value_range=(0, 1),
+            normalize=True,
         )
-        fig = make_grid(sample_images)
         self.logger.experiment.log(
             {"Random Generation": [wandb.Image(fig)]},
             step=self.global_step,

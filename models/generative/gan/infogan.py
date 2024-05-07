@@ -1,4 +1,3 @@
-import os
 from typing import Dict, List, Tuple
 
 import pytorch_lightning as pl
@@ -13,9 +12,9 @@ from torchinfo import summary
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 from torchmetrics.image.kid import KernelInceptionDistance
+from torchvision.utils import make_grid
 
 from utils.loss_functions import GaussianNLL
-from utils.visualization import make_grid
 
 
 def initialize_weights(model: nn.Module):
@@ -108,7 +107,11 @@ class Generator(nn.Module):
         ).unsqueeze(-1).unsqueeze(-1).to(self.device)
         return self.model(input)
 
-    def generate_codes(self, batch_size: int = 1, transition: bool = False) -> Tuple[Tensor, Tensor, Tensor]:
+    def generate_codes(
+        self,
+        batch_size: int = 1,
+        transition: bool = False,
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         z = torch.randn([batch_size, self.latent_dim], device=self.device)
 
         if transition:
@@ -262,7 +265,6 @@ class InfoGAN(pl.LightningModule):
         b1: float = 0.5,
         b2: float = 0.99,
         weight_decay: float = 1e-5,
-        ckpt_path: str = "",
         calculate_metrics: bool = False,
         metrics: List[str] = [],
     ) -> None:
@@ -272,14 +274,14 @@ class InfoGAN(pl.LightningModule):
         self.calculate_metrics = calculate_metrics
         self.metrics = metrics
 
-        self.generator = Generator(
+        self.G = Generator(
             img_size=img_size,
             img_channels=img_channels,
             latent_dim=latent_dim,
             categorical_code_dim=categorical_code_dim,
             continuous_code_dim=continuous_code_dim,
         )
-        self.discriminator = Discriminator(
+        self.D = Discriminator(
             img_size=img_size,
             img_channels=img_channels,
             categorical_code_dim=categorical_code_dim,
@@ -290,19 +292,13 @@ class InfoGAN(pl.LightningModule):
         self.loss_Q_cont = GaussianNLL()
 
         if self.metrics:
-            self.fid = FrechetInceptionDistance() if "fid" in self.metrics else None
-            self.kid = KernelInceptionDistance(subset_size=100) if "kid" in self.metrics else None
-            self.inception_score = InceptionScore() if "is" in self.metrics else None
-
-        if os.path.exists(ckpt_path):
-            self.load_from_checkpoint(ckpt_path)
+            self.init_metrics(reset=False)
 
         (
             self.z,
             self.categorical_c,
             self.continuous_c
-        ) = self.generator.generate_codes(batch_size=100, transition=True)
-
+        ) = self.G.generate_codes(batch_size=100, transition=True)
         self.summary()
 
     def forward(
@@ -311,34 +307,32 @@ class InfoGAN(pl.LightningModule):
         categorical_c: Tensor,
         continuous_c: Tensor,
     ) -> Tensor:
-        return self.generator(z, categorical_c, continuous_c)
+        return self.G(z, categorical_c, continuous_c)
 
     def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
         batch_size = x.size(0)
-        z, categorical_c, continuous_c = self.generator.generate_codes(batch_size)
-        x_hat = self.generator(z, categorical_c, continuous_c)
+        z, categorical_c, continuous_c = self.G.generate_codes(batch_size)
+        x_hat = self.G(z, categorical_c, continuous_c)
         d_optim, g_optim, q_optim = self.optimizers()
 
         # Train Discriminator
-        if self.global_step % 3 == 0:
-            loss_dict = self._calculate_d_loss(x, x_hat, categorical_c, continuous_c)
-            d_optim.zero_grad(set_to_none=True)
-            self.manual_backward(loss_dict["d_loss"])
-            d_optim.step()
+        loss_dict = self._calculate_d_loss(x, x_hat)
+        d_optim.zero_grad(set_to_none=True)
+        self.manual_backward(loss_dict["d_loss"])
+        d_optim.step()
 
         # Train Generator
-        elif self.global_step % 3 == 1:
-            loss_dict = self._calculate_g_loss(x_hat, categorical_c, continuous_c)
-            g_optim.zero_grad(set_to_none=True)
-            self.manual_backward(loss_dict["g_loss"])
-            g_optim.step()
+        loss_dict.update(self._calculate_g_loss(x_hat))
+        g_optim.zero_grad(set_to_none=True)
+        self.manual_backward(loss_dict["g_loss"])
+        g_optim.step()
 
-        else:
-            loss_dict = self._calculate_mi_loss(x_hat, categorical_c, continuous_c)
-            q_optim.zero_grad(set_to_none=True)
-            self.manual_backward(loss_dict["mi_loss"])
-            q_optim.step()
+        # Train Q
+        loss_dict.update(self._calculate_mi_loss(x_hat, categorical_c, continuous_c))
+        q_optim.zero_grad(set_to_none=True)
+        self.manual_backward(loss_dict["mi_loss"])
+        q_optim.step()
 
         self.log_dict(
             loss_dict,
@@ -350,11 +344,12 @@ class InfoGAN(pl.LightningModule):
     def validation_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
         batch_size = x.size(0)
-        z, categorical_c, continuous_c = self.generator.generate_codes(batch_size)
-        x_hat = self.generator(z, categorical_c, continuous_c)
+        z, categorical_c, continuous_c = self.G.generate_codes(batch_size)
+        x_hat = self.G(z, categorical_c, continuous_c)
 
-        loss_dict = self._calculate_d_loss(x, x_hat, categorical_c, continuous_c)
-        loss_dict.update(self._calculate_g_loss(x_hat, categorical_c, continuous_c))
+        loss_dict = self._calculate_d_loss(x, x_hat)
+        loss_dict.update(self._calculate_g_loss(x_hat))
+        loss_dict.update(self._calculate_mi_loss(x_hat, categorical_c, continuous_c))
 
         self.log(
             "val_loss",
@@ -378,9 +373,18 @@ class InfoGAN(pl.LightningModule):
                 sync_dist=torch.cuda.device_count() > 1,
             )
 
+            self.init_metrics(reset=True)
+
+    def init_metrics(self, reset: bool = False):
+        if reset:
             self.fid.reset() if "fid" in self.metrics else None
             self.kid.reset() if "kid" in self.metrics else None
             self.inception_score = InceptionScore().to(self.device) if "is" in self.metrics else None
+
+        else:
+            self.fid = FrechetInceptionDistance() if "fid" in self.metrics else None
+            self.kid = KernelInceptionDistance(subset_size=100) if "kid" in self.metrics else None
+            self.inception_score = InceptionScore() if "is" in self.metrics else None
 
     def update_metrics(self, x, x_hat):
         # Update metrics with real and generated images
@@ -424,19 +428,19 @@ class InfoGAN(pl.LightningModule):
 
     def configure_optimizers(self):
         d_optim = Adam(
-            self.discriminator.parameters(),
+            self.D.parameters(),
             lr=self.hparams.lr,
             betas=(self.hparams.b1, self.hparams.b2),
             weight_decay=self.hparams.weight_decay,
         )
         g_optim = Adam(
-            self.generator.parameters(),
+            self.G.parameters(),
             lr=self.hparams.lr,
             betas=(self.hparams.b1, self.hparams.b2),
             weight_decay=self.hparams.weight_decay,
         )
         q_optim = Adam(
-            list(self.discriminator.parameters()) + list(self.generator.parameters()),
+            list(self.D.parameters()) + list(self.G.parameters()),
             lr=self.hparams.lr,
             betas=(self.hparams.b1, self.hparams.b2),
             weight_decay=self.hparams.weight_decay,
@@ -448,13 +452,11 @@ class InfoGAN(pl.LightningModule):
         self,
         x: Tensor,
         x_hat: Tensor,
-        categorical_c: Tensor,
-        continuous_c: Tensor,
     ) -> Dict[str, Tensor]:
-        logits_real, _, _, _ = self.discriminator(x)
+        logits_real, _, _, _ = self.D(x)
         d_loss_real = bce_with_logits(logits_real, torch.ones_like(logits_real))
 
-        logits_fake, Q_fake_logits, Q_fake_cont_mu, Q_fake_cont_logvar = self.discriminator(x_hat.detach())
+        logits_fake, _, _, _ = self.D(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
         # Combine the losses
@@ -469,19 +471,15 @@ class InfoGAN(pl.LightningModule):
         }
         return loss_dict
 
-    def _calculate_g_loss(self, x_hat: Tensor, categorical_c: Tensor, continuous_c: Tensor) -> Dict[str, Tensor]:
-        logits_fake, Q_fake_logits, Q_fake_cont_mu, Q_fake_cont_logvar = self.discriminator(x_hat)
-        adv_loss = bce_with_logits(logits_fake, torch.ones_like(logits_fake))
+    def _calculate_g_loss(self, x_hat: Tensor) -> Dict[str, Tensor]:
+        logits_fake, _, _, _ = self.D(x_hat)
+        g_loss = bce_with_logits(logits_fake, torch.ones_like(logits_fake))
 
-        g_loss = adv_loss
-
-        loss_dict = {
-            "g_loss": g_loss,
-        }
+        loss_dict = {"g_loss": g_loss}
         return loss_dict
 
     def _calculate_mi_loss(self, x_hat: Tensor, categorical_c: Tensor, continuous_c: Tensor) -> Dict[str, Tensor]:
-        _, Q_fake_logits, Q_fake_cont_mu, Q_fake_cont_logvar = self.discriminator(x_hat)
+        _, Q_fake_logits, Q_fake_cont_mu, Q_fake_cont_logvar = self.D(x_hat)
         loss_categorical = self.loss_Q_cat(Q_fake_logits, categorical_c)
         loss_continuous = self.loss_Q_cont(continuous_c, Q_fake_cont_mu, Q_fake_cont_logvar)
 
@@ -500,14 +498,11 @@ class InfoGAN(pl.LightningModule):
 
     @torch.no_grad()
     def _log_images(self, fig_name: str):
-        x = self.generator(self.z, self.categorical_c, self.continuous_c)
+        sample_images = self.G(self.z, self.categorical_c, self.continuous_c)
         fig = make_grid(
-            x
-            .add_(1.0)
-            .mul_(127.5)
-            .byte()
-            .detach()
-            .cpu()
+            tensor=sample_images,
+            value_range=(-1, 1),
+            normalize=True,
         )
         self.logger.experiment.log(
             {fig_name: [wandb.Image(fig)]},
@@ -535,12 +530,12 @@ class InfoGAN(pl.LightningModule):
             ]
         )
         summary(
-            self.generator,
+            self.G,
             input_data=(self.z, self.categorical_c, self.continuous_c),
             col_names=col_names,
         )
         summary(
-            self.discriminator,
+            self.D,
             input_data=x,
             col_names=col_names,
         )

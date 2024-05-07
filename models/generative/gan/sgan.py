@@ -1,4 +1,3 @@
-import os
 from typing import Tuple
 
 import pytorch_lightning as pl
@@ -12,8 +11,7 @@ from torchinfo import summary
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 from torchmetrics.image.kid import KernelInceptionDistance
-
-from utils.visualization import make_grid
+from torchvision.utils import make_grid
 
 
 def initialize_weights(model: nn.Module):
@@ -102,7 +100,7 @@ class Discriminator(nn.Module):
 
         self.model = initialize_weights(self.model)
         self.classifier = nn.Linear(512, num_classes)  # For classifying real images into categories
-        self.discriminator = self._block(512, 1, 4, 1, 0, use_bn=False, final_layer=True)  # For distinguishing real vs. fake images
+        self.D = self._block(512, 1, 4, 1, 0, use_bn=False, final_layer=True)  # For distinguishing real vs. fake images
 
     @staticmethod
     def _block(
@@ -138,7 +136,7 @@ class Discriminator(nn.Module):
         b, c, h, w = features.size()
         features_gap = features.reshape(b, c, h * w).mean(-1)
 
-        real_fake_logits = self.discriminator(features).sqeeuze()
+        real_fake_logits = self.D(features).sqeeuze()
         class_logits = self.classifier(features_gap)
         return real_fake_logits, class_logits
 
@@ -163,7 +161,6 @@ class SGAN(pl.LightningModule):
         b1: float,
         b2: float,
         weight_decay: float,
-        ckpt_path: str = "",
         calculate_metrics: bool = False,
     ) -> None:
         super(DCGAN, self).__init__()
@@ -171,40 +168,35 @@ class SGAN(pl.LightningModule):
         self.automatic_optimization = False
         self.calculate_metrics = calculate_metrics
 
-        self.generator = Generator(img_channels=img_channels, latent_dim=latent_dim)
-        self.discriminator = Discriminator(img_channels=img_channels)
+        self.G = Generator(img_channels=img_channels, latent_dim=latent_dim)
+        self.D = Discriminator(img_channels=img_channels)
 
         self.fid = FrechetInceptionDistance()
         self.kid = KernelInceptionDistance(subset_size=100)
         self.inception_score = InceptionScore()
 
-        if os.path.exists(ckpt_path):
-            self.load_from_checkpoint(ckpt_path)
-
-        self.fixed_z = torch.randn([16, latent_dim, 1, 1])
+        self.z = torch.randn([16, latent_dim, 1, 1])
         self.summary()
 
     def forward(self, z: Tensor) -> Tensor:
-        return self.generator(z)
+        return self.G(z)
 
     def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, labels = batch
-        x_hat = self.generator.random_sample(x.size(0))
+        x_hat = self.G.random_sample(x.size(0))
         d_optim, g_optim = self.optimizers()
 
         # Train Discriminator
-        if self.global_step % 2 == 0:
-            loss_dict = self._calculate_d_loss(x, x_hat)
-            d_optim.zero_grad(set_to_none=True)
-            self.manual_backward(loss_dict["d_loss"])
-            d_optim.step()
+        loss_dict = self._calculate_d_loss(x, x_hat)
+        d_optim.zero_grad(set_to_none=True)
+        self.manual_backward(loss_dict["d_loss"])
+        d_optim.step()
 
         # Train Generator
-        else:
-            loss_dict = self._calculate_g_loss(x_hat)
-            g_optim.zero_grad(set_to_none=True)
-            self.manual_backward(loss_dict["g_loss"])
-            g_optim.step()
+        loss_dict.update(self._calculate_g_loss(x_hat))
+        g_optim.zero_grad(set_to_none=True)
+        self.manual_backward(loss_dict["g_loss"])
+        g_optim.step()
 
         self.log_dict(
             loss_dict,
@@ -215,7 +207,7 @@ class SGAN(pl.LightningModule):
 
     def validation_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, labels = batch
-        x_hat = self.generator.random_sample(x.size(0))
+        x_hat = self.G.random_sample(x.size(0))
 
         loss_dict = self._calculate_d_loss(x, x_hat)
         loss_dict.update(self._calculate_g_loss(x_hat))
@@ -284,22 +276,22 @@ class SGAN(pl.LightningModule):
 
     def configure_optimizers(self):
         d_optim = Adam(
-            self.discriminator.parameters(),
+            self.D.parameters(),
             lr=self.hparams.lr,
             weight_decay=self.hparams.weight_decay,
         )
         g_optim = Adam(
-            self.generator.parameters(),
+            self.G.parameters(),
             lr=self.hparams.lr,
             weight_decay=self.hparams.weight_decay,
         )
         return [d_optim, g_optim], []
 
     def _calculate_d_loss(self, x: Tensor, real_labels: Tensor, x_hat: Tensor) -> Tensor:
-        logits_real, class_logits = self.discriminator(x)
+        logits_real, class_logits = self.D(x)
         d_loss_real = bce_with_logits(logits_real, torch.ones_like(logits_real))
 
-        logits_fake, _ = self.discriminator(x_hat.detach())
+        logits_fake, _ = self.D(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
         d_loss = (d_loss_real + d_loss_fake) / 2
@@ -318,7 +310,7 @@ class SGAN(pl.LightningModule):
         return loss_dict
 
     def _calculate_g_loss(self, x_hat: Tensor) -> Tensor:
-        logits_fake = self.discriminator(x_hat)
+        logits_fake = self.D(x_hat)
         g_loss = bce_with_logits(logits_fake, torch.ones_like(logits_fake))
 
         loss_dict = {"g_loss": g_loss}
@@ -326,14 +318,11 @@ class SGAN(pl.LightningModule):
 
     @torch.no_grad()
     def _log_images(self, fig_name: str, batch_size: int):
-        sample_images = self.generator(self.fixed_z.to(self.device))
+        sample_images = self.G(self.z.to(self.device))
         fig = make_grid(
-            sample_images
-            .add_(1.0)
-            .mul_(127.5)
-            .byte()
-            .detach()
-            .cpu()
+            tensor=sample_images,
+            value_range=(-1, 1),
+            normalize=True,
         )
         self.logger.experiment.log(
             {fig_name: [wandb.Image(fig)]},
@@ -363,13 +352,13 @@ class SGAN(pl.LightningModule):
         )
 
         summary(
-            self.generator,
+            self.G,
             input_data=z,
             col_names=col_names,
         )
 
         summary(
-            self.discriminator,
+            self.D,
             input_data=x,
             col_names=col_names,
         )

@@ -33,9 +33,9 @@ class LSGAN(DCGAN):
         b1: float = 0.5,
         b2: float = 0.999,
         weight_decay: float = 1e-5,
-        ckpt_path: str = "",
         calculate_metrics: bool = False,
         metrics: List[str] = [],
+        summary: bool = True,
     ) -> None:
         super(LSGAN, self).__init__(
             img_channels=img_channels,
@@ -45,9 +45,9 @@ class LSGAN(DCGAN):
             b1=b1,
             b2=b2,
             weight_decay=weight_decay,
-            ckpt_path=ckpt_path,
             calculate_metrics=calculate_metrics,
             metrics=metrics,
+            summary=summary,
         )
 
     def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
@@ -59,11 +59,11 @@ class LSGAN(DCGAN):
         are far off from these targets.
         """
         # Real images
-        logits_real = self.discriminator(x)
+        logits_real = self.D(x)
         d_loss_real = 0.5 * torch.mean((logits_real - 1) ** 2)
 
         # Generated images
-        logits_fake = self.discriminator(x_hat.detach())
+        logits_fake = self.D(x_hat.detach())
         d_loss_fake = 0.5 * torch.mean(logits_fake**2)
 
         # Combine the losses
@@ -87,7 +87,7 @@ class LSGAN(DCGAN):
         the generator is penalized more when it produces samples that are far from the
         discriminator's decision boundary.
         """
-        logits_fake = self.discriminator(x_hat)
+        logits_fake = self.D(x_hat)
         g_loss = 0.5 * torch.mean((logits_fake - 1) ** 2)
 
         loss_dict = {

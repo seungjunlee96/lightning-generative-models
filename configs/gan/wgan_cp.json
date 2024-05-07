@@ -11,8 +11,7 @@
             "weight_decay": 0,
             "n_critic": 5,
             "clip_value": 0.01,
-            "constraint_method": "clip",
-            "ckpt_path": ""
+            "constraint_method": "clip"
         }
     },
     "dataset": {

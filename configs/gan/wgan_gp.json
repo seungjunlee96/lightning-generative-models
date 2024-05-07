@@ -11,8 +11,7 @@
             "weight_decay": 0,
             "n_critic": 5,
             "grad_penalty": 10,
-            "constraint_method": "gp",
-            "ckpt_path": ""
+            "constraint_method": "gp"
         }
     },
     "dataset": {

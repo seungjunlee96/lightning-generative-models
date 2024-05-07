@@ -8,11 +8,10 @@
             "lr": 0.0001,
             "b1": 0.5,
             "b2": 0.999,
-            "weight_decay": 1e-5,
+            "weight_decay": 1e-5
             "n_critic": 5,
             "grad_penalty": 10,
-            "constraint_method": "gp",
-            "ckpt_path": ""
+            "constraint_method": "gp"
         }
     },
     "dataset": {

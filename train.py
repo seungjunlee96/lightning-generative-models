@@ -118,7 +118,6 @@ if __name__ == "__main__":
         LogArtifactCallback(
             file_path=os.path.join(args.experiment_dir, Path(args.config_path).name),
         )
-
     ]
 
     # Trainer
@@ -131,6 +130,7 @@ if __name__ == "__main__":
         logger=wandb_logger,
         callbacks=callbacks,
         precision=args.precision,
+        deterministic=True,
     )
 
     # Start training 🔥

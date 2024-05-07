@@ -3,7 +3,6 @@ References:
     https://keras.io/examples/generative/vae/
     https://www.tensorflow.org/tutorials/generative/cvae
 """
-import os
 from typing import List, Tuple
 
 import numpy as np
@@ -120,7 +119,6 @@ class VAE(pl.LightningModule):
         b2: float = 0.999,
         weight_decay: float = 1e-5,
         kld_weight: float = 1e-2,
-        ckpt_path: str = "",
     ):
         super(VAE, self).__init__()
         self.save_hyperparameters()
@@ -132,10 +130,7 @@ class VAE(pl.LightningModule):
             img_channels=img_channels, img_size=img_size, latent_dim=latent_dim
         )
 
-        if os.path.exists(ckpt_path):
-            self.load_from_checkpoint(ckpt_path)
-
-        self.fixed_z = torch.randn([16, latent_dim])
+        self.z = torch.randn([16, latent_dim])
         self.summary()
 
     def reparameterize(self, mu: Tensor, log_var: Tensor) -> Tensor:
@@ -186,7 +181,7 @@ class VAE(pl.LightningModule):
             """Log and cache latent variables for visualization."""
             if batch_idx == 0:
                 self._log_images(
-                    self.decoder(self.fixed_z.to(self.device)),
+                    self.decoder(self.z.to(self.device)),
                     "Random Generation",
                 )
 
@@ -221,12 +216,11 @@ class VAE(pl.LightningModule):
 
     @torch.no_grad()
     def _log_images(self, images: Tensor, fig_name: str):
-        # Normalize the images to the range [0, 255] for visualization
-        images = ((images + 1.0) / 2.0) * 255.0
-        images = images.clamp(0, 255).byte().detach().cpu()
-
-        # Create a grid of images and log it
-        fig = make_grid(images)
+        fig = make_grid(
+            tensor=images,
+            value_range=(-1, 1),
+            normalize=True,
+        )
         self.logger.experiment.log(
             {fig_name: [wandb.Image(fig)]}, step=self.global_step
         )

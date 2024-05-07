@@ -30,9 +30,9 @@ class WGAN(DCGAN):
         clip_value: float = 0.01,
         grad_penalty: float = 10,
         constraint_method: str = "gp",
-        ckpt_path: str = "",
         calculate_metrics: bool = False,
         metrics: List[str] = [],
+        summary: bool = True,
     ) -> None:
         super(WGAN, self).__init__(
             img_channels=img_channels,
@@ -42,9 +42,9 @@ class WGAN(DCGAN):
             b1=b1,
             b2=b2,
             weight_decay=weight_decay,
-            ckpt_path=ckpt_path,
             calculate_metrics=calculate_metrics,
             metrics=metrics,
+            summary=summary,
         )
         assert constraint_method in [
             "gp",
@@ -57,7 +57,7 @@ class WGAN(DCGAN):
 
     def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
-        x_hat = self.generator.random_sample(x.size(0))
+        x_hat = self.G.random_sample(x.size(0))
         d_optim, g_optim = self.optimizers()
 
         # Train Discriminator
@@ -82,9 +82,8 @@ class WGAN(DCGAN):
         )
 
     def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
-        d_loss_real = self.discriminator(x).mean()
-        d_loss_fake = self.discriminator(x_hat.detach()).mean()
-
+        d_loss_real = self.D(x).mean()
+        d_loss_fake = self.D(x_hat.detach()).mean()
         d_loss = d_loss_fake - d_loss_real
 
         loss_dict = {
@@ -111,7 +110,7 @@ class WGAN(DCGAN):
         return loss_dict
 
     def _calculate_g_loss(self, x_hat: Tensor) -> Tensor:
-        g_loss = -self.discriminator(x_hat).mean()
+        g_loss = -self.D(x_hat).mean()
         loss_dict = {"g_loss": g_loss}
         return loss_dict
 
@@ -139,7 +138,7 @@ class WGAN(DCGAN):
         interpolated_images.requires_grad_(True)
 
         # Compute the discriminator's scores for interpolated samples
-        scores_on_interpolated = self.discriminator(interpolated_images)
+        scores_on_interpolated = self.D(interpolated_images)
 
         # Calculate gradients of the scores with respect to the interpolated images
         gradients = torch.autograd.grad(
@@ -162,7 +161,7 @@ class WGAN(DCGAN):
         which ensures the discriminator's gradients are bounded.
         A crude way to enforce the 1-Lipschitz constraint on the critic.
         """
-        for param in self.discriminator.parameters():
+        for param in self.D.parameters():
             param.data.clamp_(
                 -self.hparams.clip_value,
                 self.hparams.clip_value,
@@ -173,23 +172,23 @@ class WGAN(DCGAN):
             # Empirically the authors recommended RMSProp optimizer on the critic,
             # rather than a momentum based optimizer such as Adam which could cause instability in the model training.
             d_optim = RMSprop(
-                self.discriminator.parameters(),
+                self.D.parameters(),
                 lr=self.hparams.lr,
             )
             g_optim = RMSprop(
-                self.generator.parameters(),
+                self.G.parameters(),
                 lr=self.hparams.lr,
             )
 
         elif self.hparams.constraint_method == "gp":
             d_optim = Adam(
-                self.discriminator.parameters(),
+                self.D.parameters(),
                 lr=self.hparams.lr,
                 betas=(self.hparams.b1, self.hparams.b2),
                 weight_decay=self.hparams.weight_decay,
             )
             g_optim = Adam(
-                self.generator.parameters(),
+                self.G.parameters(),
                 lr=self.hparams.lr,
                 betas=(self.hparams.b1, self.hparams.b2),
                 weight_decay=self.hparams.weight_decay,

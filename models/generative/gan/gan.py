@@ -1,4 +1,3 @@
-import os
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -10,8 +9,7 @@ from torch import Tensor
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
 from torch.optim import Adam
 from torchinfo import summary
-
-from utils.visualization import make_grid
+from torchvision.utils import make_grid
 
 
 class Generator(nn.Module):
@@ -111,49 +109,54 @@ class GAN(pl.LightningModule):
         b2: float = 0.999,
         weight_decay: float = 1e-5,
         loss_type: str = "non-saturating",
-        ckpt_path: str = "",
+        calculate_metrics: bool = False,
+        metrics: List[str] = [],
+        summary: bool = True
     ):
         super(GAN, self).__init__()
         self.save_hyperparameters()
         self.automatic_optimization = False
+        self.calculate_metrics = calculate_metrics
+        self.metrics = metrics
 
-        self.generator = Generator(
+        self.G = Generator(
             img_channels=img_channels,
             img_size=img_size,
             latent_dim=latent_dim,
         )
-        self.discriminator = Discriminator(
+        self.D = Discriminator(
             img_channels=img_channels,
             img_size=img_size,
         )
 
-        if os.path.exists(ckpt_path):
-            self.load_from_checkpoint(ckpt_path)
+        if self.metrics:
+            self.fid = FrechetInceptionDistance() if "fid" in self.metrics else None
+            self.kid = KernelInceptionDistance(subset_size=100) if "kid" in self.metrics else None
+            self.inception_score = InceptionScore() if "is" in self.metrics else None
 
-        self.fixed_z = torch.randn([16, latent_dim])
-        self.summary()
+        self.z = torch.randn([64, latent_dim])
+        if summary:
+            self.summary()
 
     def forward(self, z: Tensor) -> Tensor:
-        return self.generator(z)
+        return self.G(z)
 
     def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
         x, _ = batch
-        x_hat = self.generator.random_sample(x.size(0))
+        x_hat = self.G.random_sample(x.size(0))
         d_optim, g_optim = self.optimizers()
 
         # Train Discriminator
-        if self.global_step % 2 == 0:
-            loss_dict = self._calculate_d_loss(x, x_hat)
-            d_optim.zero_grad(set_to_none=True)
-            self.manual_backward(loss_dict["d_loss"])
-            d_optim.step()
+        loss_dict = self._calculate_d_loss(x, x_hat)
+        d_optim.zero_grad(set_to_none=True)
+        self.manual_backward(loss_dict["d_loss"])
+        d_optim.step()
 
         # Train Generator
-        else:
-            loss_dict = self._calculate_g_loss(x_hat)
-            g_optim.zero_grad(set_to_none=True)
-            self.manual_backward(loss_dict["g_loss"])
-            g_optim.step()
+        loss_dict.update(self._calculate_g_loss(x_hat))
+        g_optim.zero_grad(set_to_none=True)
+        self.manual_backward(loss_dict["g_loss"])
+        g_optim.step()
 
         self.log_dict(
             loss_dict,
@@ -164,7 +167,7 @@ class GAN(pl.LightningModule):
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
         x, _ = batch
-        x_hat = self.generator.random_sample(x.size(0))
+        x_hat = self.G.random_sample(x.size(0))
 
         loss_dict = self._calculate_d_loss(x, x_hat)
         loss_dict.update(self._calculate_g_loss(x_hat))
@@ -176,18 +179,77 @@ class GAN(pl.LightningModule):
             logger=True,
             sync_dist=torch.cuda.device_count() > 1,
         )
+
         if batch_idx == 0:
             self._log_images(fig_name="Random Generation", batch_size=16)
 
+        if self.calculate_metrics:
+            self.update_metrics(x, x_hat)
+
+    def on_validation_epoch_end(self):
+        if self.metrics:
+            metrics = self.compute_metrics()
+
+            self.log_dict(
+                metrics,
+                prog_bar=True,
+                logger=True,
+                sync_dist=torch.cuda.device_count() > 1,
+            )
+
+            self.fid.reset() if "fid" in self.metrics else None
+            self.kid.reset() if "kid" in self.metrics else None
+            self.inception_score = InceptionScore().to(self.device) if "is" in self.metrics else None
+
+    def update_metrics(self, x, x_hat):
+        # Update metrics with real and generated images
+        x = (
+            x
+            .add_(1.0)
+            .mul_(127.5)
+            .byte()
+        )
+        x_hat = (
+            x_hat
+            .add_(1.0)
+            .mul_(127.5)
+            .byte()
+        )
+
+        if "fid" in self.metrics:
+            self.fid.update(x, real=True)
+            self.fid.update(x_hat, real=False)
+
+        if "kid" in self.metrics:
+            self.kid.update(x, real=True)
+            self.kid.update(x_hat, real=False)
+
+        if "is" in self.metrics:
+            self.inception_score.update(x_hat)
+
+    def compute_metrics(self) -> Dict[str, Tensor]:
+        fid_score = self.fid.compute() if "fid" in self.metrics else None
+        kid_mean, kid_std = self.kid.compute() if "kid" in self.metrics else None, None
+        is_mean, is_std = self.inception_score.compute() if "is" in self.metrics else None, None
+
+        metrics = {
+            "fid_score": fid_score,
+            "mean_kid_score": kid_mean,
+            "std_kid_score": kid_std,
+            "mean_inception_score": is_mean,
+            "std_inception_score": is_std,
+        }
+        return metrics
+
     def configure_optimizers(self):
         d_optim = Adam(
-            self.discriminator.parameters(),
+            self.D.parameters(),
             lr=self.hparams.lr,
             betas=(self.hparams.b1, self.hparams.b2),
             weight_decay=self.hparams.weight_decay,
         )
         g_optim = Adam(
-            self.generator.parameters(),
+            self.G.parameters(),
             lr=self.hparams.lr,
             betas=(self.hparams.b1, self.hparams.b2),
             weight_decay=self.hparams.weight_decay,
@@ -204,10 +266,10 @@ class GAN(pl.LightningModule):
 
         The total discriminator loss is the sum of the above two losses.
         """
-        logits_real = self.discriminator(x)
+        logits_real = self.D(x)
         d_loss_real = bce_with_logits(logits_real, torch.ones_like(logits_real))
 
-        logits_fake = self.discriminator(x_hat.detach())
+        logits_fake = self.D(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
         d_loss = (d_loss_real + d_loss_fake) / 2
@@ -229,7 +291,7 @@ class GAN(pl.LightningModule):
         This method generates fake data, passes it through the discriminator, and computes
         the loss based on how well the generator fooled the discriminator.
         """
-        logits_fake = self.discriminator(x_hat)
+        logits_fake = self.D(x_hat)
 
         if self.hparams.loss_type == "min-max":
             # Original generator loss based on min-max game with value function V(G,D).
@@ -248,10 +310,12 @@ class GAN(pl.LightningModule):
 
     @torch.no_grad()
     def _log_images(self, fig_name: str, batch_size: int):
-        sample_images = self.generator(self.fixed_z.to(self.device))
-        sample_images = ((sample_images + 1.0) / 2.0) * 255.0
-        sample_images = sample_images.clamp(0, 255).byte().detach().cpu()
-        fig = make_grid(sample_images)
+        sample_images = self.G(self.z.to(self.device))
+        fig = make_grid(
+            tensor=sample_images,
+            value_range=(-1, 1),
+            normalize=True,
+        )
         self.logger.experiment.log(
             {fig_name: [wandb.Image(fig)]},
             step=self.global_step,
@@ -269,7 +333,6 @@ class GAN(pl.LightningModule):
             "trainable",
         ],
     ):
-        z = torch.randn([1, self.hparams.latent_dim])
         x = torch.randn(
             [
                 1,
@@ -280,13 +343,13 @@ class GAN(pl.LightningModule):
         )
 
         summary(
-            self.generator,
-            input_data=z,
+            self.G,
+            input_data=self.z,
             col_names=col_names,
         )
 
         summary(
-            self.discriminator,
+            self.D,
             input_data=x,
             col_names=col_names,
         )

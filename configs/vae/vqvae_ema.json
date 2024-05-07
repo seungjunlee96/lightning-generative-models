@@ -17,7 +17,6 @@
             "b1": 0.9,
             "b2": 0.999,
             "weight_decay": 1e-5,
-            "ckpt_path": "",
             "loss_weights": {
                 "recon_loss": 1,
                 "vq_loss": 10
