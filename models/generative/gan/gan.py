@@ -141,53 +141,52 @@ class GAN(pl.LightningModule):
     def forward(self, z: Tensor) -> Tensor:
         return self.G(z)
 
-    def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
+    def _common_step(
+        self,
+        batch: Tuple[Tensor, Tensor],
+        mode: str,
+    ) -> None:
         x, _ = batch
         x_hat = self.G.random_sample(x.size(0))
         d_optim, g_optim = self.optimizers()
 
         # Train Discriminator
         loss_dict = self._calculate_d_loss(x, x_hat)
-        d_optim.zero_grad(set_to_none=True)
-        self.manual_backward(loss_dict["d_loss"])
-        d_optim.step()
+        if self.training:
+            d_optim.zero_grad(set_to_none=True)
+            self.manual_backward(loss_dict["d_loss"])
+            d_optim.step()
 
         # Train Generator
         loss_dict.update(self._calculate_g_loss(x_hat))
-        g_optim.zero_grad(set_to_none=True)
-        self.manual_backward(loss_dict["g_loss"])
-        g_optim.step()
+        if self.training:
+            g_optim.zero_grad(set_to_none=True)
+            self.manual_backward(loss_dict["g_loss"])
+            g_optim.step()
 
+        loss_dict = {f"{mode}_{k}": v for k, v in loss_dict.items()}
         self.log_dict(
             loss_dict,
             prog_bar=True,
             logger=True,
             sync_dist=torch.cuda.device_count() > 1,
         )
+        return x, x_hat, loss_dict
 
-    def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
-        x, _ = batch
-        x_hat = self.G.random_sample(x.size(0))
+    def training_step(self, batch: Tuple[Tensor, Tensor]) -> None:
+        _, _, loss_dict = self._common_step(batch, "train")
+        return loss_dict
 
-        loss_dict = self._calculate_d_loss(x, x_hat)
-        loss_dict.update(self._calculate_g_loss(x_hat))
-
-        self.log(
-            "val_loss",
-            loss_dict["g_loss"],
-            prog_bar=True,
-            logger=True,
-            sync_dist=torch.cuda.device_count() > 1,
-        )
-
-        if batch_idx == 0:
-            self._log_images(fig_name="Random Generation", batch_size=16)
+    def validation_step(self, batch: Tuple[Tensor, Tensor]) -> None:
+        x, x_hat, _ = self._common_step(batch, "val")
 
         if self.calculate_metrics:
             self.update_metrics(x, x_hat)
 
     def on_validation_epoch_end(self):
-        if self.metrics:
+        self._log_images(fig_name="Random Generation", batch_size=16)
+
+        if self.calculate_metrics:
             metrics = self.compute_metrics()
 
             self.log_dict(
