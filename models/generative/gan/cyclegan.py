@@ -2,7 +2,10 @@ from typing import Tuple
 
 import pytorch_lightning as pl
 import torch
+import torch.nn.functional as F
 from torch import nn
+from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
+from torch.optim import Adam
 
 
 class ResidualBlock(nn.Module):
@@ -38,7 +41,7 @@ class Generator(nn.Module):
         self.model = nn.Sequential(
             self._initial_block(in_channels=in_channels, out_channels=64),
             *self._downsampling_blocks(in_channels=64, num_blocks=2),
-            *self._residual_blocks(in_channels=256, nun_blocks=num_res_blocks),
+            *self._residual_blocks(in_channels=256, num_blocks=num_res_blocks),
             *self._upsampling_blocks(in_channels=256, num_blocks=2),
             self._output_block(in_channels=64, out_channels=out_channels)
         )
@@ -75,19 +78,26 @@ class Generator(nn.Module):
             in_channels *= 2
         return blocks
 
-    def _residual_blocks(self, in_channels, num_blocks):
+    def _residual_blocks(self, in_channels: int, num_blocks: int):
         return [ResidualBlock(in_channels) for _ in range(num_blocks)]
 
-    def _upsampling_blocks(self, in_channels, num_blocks):
+    def _upsampling_blocks(
+        self,
+        in_channels: int,
+        num_blocks: int,
+        kernel_size: int = 3,
+        stride: int = 2,
+        padding: int = 1,
+    ):
         blocks = []
         for _ in range(num_blocks):
             blocks.append(
                 nn.ConvTranspose2d(
                     in_channels,
                     in_channels // 2,
-                    kernel_size=3,
-                    stride=2,
-                    padding=1,
+                    kernel_size,
+                    stride,
+                    padding,
                     output_padding=1,
                 )
             )
@@ -143,13 +153,14 @@ class Discriminator(nn.Module):
 class CycleGAN(pl.LightningModule):
     """
     Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks
-    https://junyanz.github.io/CycleGAN/
+    - Official code: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix
     """
 
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
+        lambda_identity: float = 0.5,
         lambda_cycle: float = 10.0,
         lr: float = 0.0002,
     ):
@@ -157,153 +168,171 @@ class CycleGAN(pl.LightningModule):
         self.save_hyperparameters()
         self.automatic_optimization = False
 
-        # Models
         self.G_AB = Generator(in_channels, out_channels)
         self.G_BA = Generator(out_channels, in_channels)
         self.D_A = Discriminator(in_channels)
         self.D_B = Discriminator(out_channels)
 
-        # Hyperparameters
-        self.lambda_cycle = lambda_cycle
-        self.lr = lr
-
-        # Loss criteria
-        self.criterion_GAN = nn.MSELoss()
-        self.criterion_cycle = nn.L1Loss()
-
     def forward(self, real_A, real_B):
-        fake_B = self.G_AB(real_A)
         fake_A = self.G_BA(real_B)
-        identity_A = self.G_AB(fake_A)
-        identity_B = self.G_BA(fake_B)
+        fake_B = self.G_AB(real_A)
+        identity_A = self.G_BA(fake_B)
+        identity_B = self.G_AB(fake_A)
         return fake_A, fake_B, identity_A, identity_B
 
-    def adversarial_loss(
+    def _calculate_g_loss(
         self,
-        preds: torch.Tensor,
-        target_real: bool,
-    ) -> torch.Tensor:
-        target = (
-            torch.ones_like(preds) if target_real
-            else torch.zeros_like(preds)
-        )
-        return self.criterion_GAN(preds, target)
-
-    def _generator_loss(
-        self,
-        real: torch.Tensor,
-        fake: torch.Tensor,
-        identity: torch.Tensor,
-        G: nn.Module,
-        D: nn.Module,
-        name: str,
+        real_A: torch.Tensor,
+        real_B: torch.Tensor,
+        fake_A: torch.Tensor,
+        fake_B: torch.Tensor,
+        identity_A: torch.Tensor,
+        identity_B: torch.Tensor,
     ) -> torch.Tensor:
         # Adversarial loss
-        adv_loss = self.adversarial_loss(D(fake), True)
+        logits_fake_A = self.D_A(fake_A)
+        logits_fake_B = self.D_B(fake_B)
+
+        adv_loss = (
+            bce_with_logits(logits_fake_A, torch.ones_like(logits_fake_A))
+            + bce_with_logits(logits_fake_B, torch.ones_like(logits_fake_B))
+        )
+
+        # Identity loss
+        identity_loss = (
+            F.l1_loss(fake_B, real_A)
+            + F.l1_loss(fake_A, real_B)
+        )
 
         # Cycle consistency loss
-        cycle_loss = self.criterion_cycle(identity, real) * self.lambda_cycle
+        cycle_loss = (
+            F.l1_loss(identity_A, real_A)
+            + F.l1_loss(identity_B, real_B)
+        )
+
+        # Generator loss
+        g_loss = (
+            adv_loss
+            + identity_loss * self.hparams.lambda_identity
+            + cycle_loss * self.hparams.lambda_cycle
+        )
 
         loss_dict = {
-            f"adv_loss_{name}": adv_loss,
-            f"cycle_loss_{name}": cycle_loss,
-            f"g_loss_{name}": adv_loss + cycle_loss,
+            "adv_loss": adv_loss,
+            "identity_loss": identity_loss,
+            "cycle_loss": cycle_loss,
+            "g_loss": g_loss,
         }
+
         return loss_dict
 
-    def _discriminator_loss(
+    def _calculate_d_loss(
         self,
-        real: torch.Tensor,
-        fake: torch.Tensor,
-        D: nn.Module,
-        name: str,
+        real_A: torch.Tensor,
+        real_B: torch.Tensor,
+        fake_A: torch.Tensor,
+        fake_B: torch.Tensor,
     ) -> torch.Tensor:
-        d_loss_real = self.adversarial_loss(D(real), True)
-        d_loss_fake = self.adversarial_loss(D(fake.detach()), False)
-        d_loss = (d_loss_real + d_loss_fake) / 2
+        # Discriminator A
+        logits_real_A = self.D_A(real_A)
+        d_loss_real_A = bce_with_logits(logits_real_A, torch.ones_like(logits_real_A))
+
+        logits_fake_A = self.D_A(fake_A.detach())
+        d_loss_fake_A = bce_with_logits(logits_fake_A, torch.zeros_like(logits_fake_A))
+
+        d_loss_A = (d_loss_real_A + d_loss_fake_A) / 2
+
+        # Discriminator B
+        logits_real_B = self.D_B(real_B)
+        d_loss_real_B = bce_with_logits(logits_real_B, torch.ones_like(logits_real_B))
+
+        logits_fake_B = self.D_B(fake_B.detach())
+        d_loss_fake_B = bce_with_logits(logits_fake_B, torch.zeros_like(logits_fake_B))
+
+        d_loss_B = (d_loss_real_B + d_loss_fake_B) / 2
+
+        # Discriminator loss
+        d_loss = d_loss_A + d_loss_B
 
         loss_dict = {
-            f"d_loss_real_{name}": d_loss_real,
-            f"d_loss_fake_{name}": d_loss_fake,
-            f"d_loss_{name}": d_loss,
+            "d_loss_real_A": d_loss_real_A,
+            "d_loss_fake_A": d_loss_fake_A,
+            "d_loss_A": d_loss_A,
+            "d_loss_real_B": d_loss_real_B,
+            "d_loss_fake_B": d_loss_fake_B,
+            "d_loss_B": d_loss_B,
+            "d_loss": d_loss,
         }
+
         return loss_dict
 
-    def training_step(
+    def _common_step(
         self,
         batch: Tuple[torch.Tensor, torch.Tensor],
-        batch_idx: int,
+        mode: str,
     ) -> torch.Tensor:
         real_A, real_B = batch
         fake_A, fake_B, identity_A, identity_B = self(real_A, real_B)
+        d_optim, g_optim = self.optimizers()
 
-        # Generator AB
-        loss_dict = self._generator_loss(
-            real=real_A,
-            fake=fake_A,
-            identity=identity_A,
-            D=D_A,
+        # Train Discriminator
+        loss_dict = self._calculate_d_loss(
+            real_A=real_A,
+            real_B=real_B,
+            fake_A=fake_A,
+            fake_B=fake_B,
         )
-        d_optim.zero_grad(set_to_none=True)
-        self.manual_backward(loss_dict["G"])
-        d_optim.step()
+        if self.training:
+            d_optim.zero_grad(set_to_none=True)
+            self.manual_backward(loss_dict["d_loss"])
+            d_optim.step()
 
-        # Generator BA
-        if batch_idx % 4 == 1:
-            loss_dict = self._generator_loss(
-                real=real_B,
-                fake=fake_B,
-                identity=identity_B,
-                D=D_B,
+        # Train Generator
+        loss_dict.update(
+            self._calculate_g_loss(
+                real_A=real_A,
+                real_B=real_B,
+                fake_A=fake_A,
+                fake_B=fake_B,
+                identity_A=identity_A,
+                identity_B=identity_B,
             )
-            return loss_dict["G"]
+        )
+        if self.training:
+            g_optim.zero_grad(set_to_none=True)
+            self.manual_backward(loss_dict["g_loss"])
+            g_optim.step()
 
-        # Discriminator D_A
-        if batch_idx % 4 == 2:
-            loss_dict = self._discriminator_loss(
-                real=real_A,
-                fake=fake_A,
-                D=D_A,
-            )
-            return loss_dict["D"]
-
-        # Discriminator D_B
-        if batch_idx % 4 == 3:
-            loss_dict = self._discriminator_loss(
-                real=real_B,
-                fake=fake_B,
-                D=D_B,
-            )
-            return loss_dict["D"]
-
+        loss_dict = {f"{mode}_{k}": v for k, v in loss_dict.items()}
         self.log_dict(
             loss_dict,
             prog_bar=True,
             logger=True,
             sync_dist=torch.cuda.device_count() > 1,
         )
+        return loss_dict
+
+    def training_step(
+        self,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+    ) -> torch.Tensor:
+        return self._common_step(batch, "train")
+
+    def validation_step(
+        self,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+    ) -> torch.Tensor:
+        return self._common_step(batch, "val")
 
     def configure_optimizers(self):
-        optimizers = {
-            "G": torch.optim.Adam(
-                self.G_AB.parameters(),
-                lr=self.lr,
-                betas=(0.5, 0.999),
-            ),
-            "F": torch.optim.Adam(
-                self.G_BA.parameters(),
-                lr=self.lr,
-                betas=(0.5, 0.999),
-            ),
-            "D_A": torch.optim.Adam(
-                self.D_A.parameters(),
-                lr=self.lr,
-                betas=(0.5, 0.999),
-            ),
-            "D_B": torch.optim.Adam(
-                self.D_B.parameters(),
-                lr=self.lr,
-                betas=(0.5, 0.999),
-            ),
-        }
-        return optimizers.values(), []
+        d_optim = Adam(
+            list(self.D_A.parameters()) + list(self.D_B.parameters()),
+            lr=self.hparams.lr,
+            betas=(0.5, 0.999),
+        )
+        g_optim = Adam(
+            list(self.G_AB.parameters()) + list(self.G_BA.parameters()),
+            lr=self.hparams.lr,
+            betas=(0.5, 0.999),
+        )
+        return (d_optim, g_optim), []
