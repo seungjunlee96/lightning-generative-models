@@ -9,7 +9,6 @@
             "b1": 0.5,
             "b2": 0.999,
             "weight_decay": 1e-5,
-            "ckpt_path": "",
             "num_classes": 10
         }
     },

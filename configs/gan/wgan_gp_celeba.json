@@ -1,18 +1,17 @@
 {
     "model": {
-        "name": "InfoGAN",
+        "name": "WGAN",
         "args": {
             "img_channels": 3,
             "img_size": 64,
             "latent_dim": 100,
-            "categorical_code_dim": 10,
-            "continuous_code_dim": 2,
-            "lambda_cat": 1,
-            "lambda_cont": 0.1,
-            "lr": 0.0002,
+            "lr": 0.0001,
             "b1": 0.5,
             "b2": 0.999,
             "weight_decay": 1e-5
+            "n_critic": 5,
+            "grad_penalty": 10,
+            "constraint_method": "gp"
         }
     },
     "dataset": {

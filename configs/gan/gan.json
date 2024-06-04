@@ -9,8 +9,7 @@
             "b1": 0.5,
             "b2": 0.999,
             "weight_decay": 1e-5,
-            "loss_type": "non-saturating",
-            "ckpt_path": ""
+            "loss_type": "non-saturating"
         }
     },
     "dataset": {

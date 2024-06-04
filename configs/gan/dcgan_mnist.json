@@ -1,10 +1,10 @@
 {
     "model": {
-        "name": "LSGAN",
+        "name": "DCGAN",
         "args": {
-            "img_channels": 3,
-            "img_size": 64,
-            "latent_dim": 1024,
+            "img_size": 28,
+            "img_channels": 1,
+            "latent_dim": 100,
             "lr": 0.0002,
             "b1": 0.5,
             "b2": 0.999,
@@ -12,9 +12,9 @@
         }
     },
     "dataset": {
-        "name": "CelebA",
-        "img_size": 64,
-        "img_channels": 3,
+        "name": "MNIST",
+        "img_size": 28,
+        "img_channels": 1,
         "batch_size": 128,
         "train_val_split": 0.8
     }

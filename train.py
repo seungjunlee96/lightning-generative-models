@@ -12,12 +12,12 @@ from pytorch_lightning.loggers import WandbLogger
 from data.datamodule import DataModule
 from utils.callbacks import LogArtifactCallback
 from utils.lightning_utils import configure_num_workers, configure_strategy
-from utils.load_model import load_config, load_model
+from utils.loader import load_config, load_model
+from utils.path import EXPERIMENT_DIR
 from utils.seed import seed_everything
 
 # Set Constants
-seed_everything(seed=10, workers=True, cuda_deterministic=True)
-EXPERIMENTS_DIR = "experiments"
+seed_everything(seed=10, workers=True)
 EXPERIMENT_TIME = datetime.now().strftime("%Y-%m-%d_%H:%M")
 
 
@@ -72,7 +72,7 @@ def setup_arguments(print_args: bool = True, save_args: bool = True):
 
     # Creates an experiment directory
     args.experiment_dir = os.path.join(
-        EXPERIMENTS_DIR,
+        EXPERIMENT_DIR,
         args.config["model"]["name"],
         args.experiment_name,
     )
@@ -118,7 +118,6 @@ if __name__ == "__main__":
         LogArtifactCallback(
             file_path=os.path.join(args.experiment_dir, Path(args.config_path).name),
         )
-
     ]
 
     # Trainer
@@ -131,6 +130,7 @@ if __name__ == "__main__":
         logger=wandb_logger,
         callbacks=callbacks,
         precision=args.precision,
+        deterministic=True,
     )
 
     # Start training 🔥

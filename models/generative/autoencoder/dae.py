@@ -6,8 +6,7 @@ import torch.nn as nn
 import wandb
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
-
-from utils.visualization import make_grid
+from torchvision.utils import make_grid
 
 
 class Encoder(nn.Module):
@@ -218,12 +217,12 @@ class DAE(pl.LightningModule):
 
     @torch.no_grad()
     def _log_images(self, images: Tensor, fig_name: str):
-        # Normalize the images to the range [0, 255] for visualization
-        images = ((images + 1.0) / 2.0) * 255.0
-        images = images.clamp(0, 255).byte().detach().cpu()
-
         # Create a grid of images and log it
-        fig = make_grid(images)
+        fig = make_grid(
+            tensor=images,
+            value_range=(-1, 1),
+            normalize=True,
+        )
         self.logger.experiment.log(
             {fig_name: [wandb.Image(fig)]},
             step=self.global_step,

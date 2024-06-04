@@ -1,5 +1,5 @@
-import importlib
 import json
+from importlib import import_module
 from typing import Dict
 
 GENERATIVE_MODELS = [
@@ -30,16 +30,17 @@ def load_model(model_config: Dict):
     for generative_model in GENERATIVE_MODELS:
         try:
             # Try to import the model from the current generative_model
-            module = importlib.import_module(
-                f"models.generative.{generative_model}.{model_name.lower()}"
-            )
+            module_path = f"models.generative.{generative_model}.{model_name.lower()}"
+            module = import_module(module_path)
             model_class = getattr(module, model_name)
             return model_class(**model_config["args"])
         except ImportError as e:
             errors.append(str(e))
             continue
+
+    error_messages = '\n'.join(errors)
     raise ValueError(
-        f"Failed to import {model_name}. Errors encountered: {', '.join(errors)}"
+        f"Failed to import {model_name}. Errors encountered: \n {error_messages}"
     )
 
 

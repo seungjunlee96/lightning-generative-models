@@ -1,4 +1,3 @@
-import os
 from typing import Dict, List, Tuple
 
 import pandas as pd
@@ -9,10 +8,10 @@ import wandb
 from torch import Tensor, nn
 from torch.optim import Adam
 from torchinfo import summary
+from torchvision.utils import make_grid
 
 from models.modules.residual import ResidualStack
 from models.modules.vector_quantizer import VectorQuantizer, VectorQuantizerEMA
-from utils.visualization import make_grid
 
 
 class Encoder(nn.Module):
@@ -121,7 +120,6 @@ class VQVAE(pl.LightningModule):
         b1: float = 0.5,
         b2: float = 0.999,
         weight_decay: float = 1e-5,
-        ckpt_path: str = "",
         loss_weights: Dict = {
             "recon_loss": 1.0,
             "vq_loss": 1.0,
@@ -160,9 +158,6 @@ class VQVAE(pl.LightningModule):
                 embedding_dim=embedding_dim,
                 commitment_cost=commitment_cost,
             )
-
-        if os.path.exists(ckpt_path):
-            self.load_from_checkpoint(ckpt_path)
 
         self.summary()
 
@@ -220,19 +215,12 @@ class VQVAE(pl.LightningModule):
 
     @torch.no_grad()
     def _log_images(self, images: Tensor, fig_name: str):
-        # Normalize the images to the range [0, 255] for visualization
-        images = (
-            images[:16]
-            .add_(1.0)
-            .mul_(127.5)
-            .clamp(0, 255)
-            .byte()
-            .detach()
-            .cpu()
-        )
-
         # Create a grid of images and log it
-        fig = make_grid(images)
+        fig = make_grid(
+            tensor=images,
+            value_range=(-1, 1),
+            normalize=True,
+        )
         self.logger.experiment.log(
             {fig_name: [wandb.Image(fig)]},
             step=self.global_step,

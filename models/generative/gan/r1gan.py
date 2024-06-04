@@ -27,7 +27,6 @@ class R1GAN(DCGAN):
     - b2 (float): Beta2 parameter for the Adam optimizer.
     - weight_decay (float): Weight decay for the optimizer.
     - r1_penalty (float, optional): Weight of the R1 regularization term. Default: 10.0.
-    - ckpt_path (str, optional): Path to save model checkpoints.
     - calculate_metrics (bool, optional): Flag to enable or disable metric calculation.
 
     The class inherits from DCGAN, adding the R1 regularization term to the
@@ -44,7 +43,6 @@ class R1GAN(DCGAN):
         b2: float,
         weight_decay: float,
         r1_penalty: float = 10.0,
-        ckpt_path: str = "",
         calculate_metrics: bool = False,
         metrics: List[str] = [],
     ) -> None:
@@ -56,7 +54,6 @@ class R1GAN(DCGAN):
             b1=b1,
             b2=b2,
             weight_decay=weight_decay,
-            ckpt_path=ckpt_path,
             calculate_metrics=calculate_metrics,
             metrics=metrics,
         )
@@ -64,9 +61,9 @@ class R1GAN(DCGAN):
 
     def _calculate_d_loss(self, x: Tensor, x_hat: Tensor) -> Tensor:
         # Calculate standard discriminator losses
-        logits_real = self.discriminator(x)
+        logits_real = self.D(x)
         d_loss_real = bce_with_logits(logits_real, torch.ones_like(logits_real))
-        logits_fake = self.discriminator(x_hat.detach())
+        logits_fake = self.D(x_hat.detach())
         d_loss_fake = bce_with_logits(logits_fake, torch.zeros_like(logits_fake))
 
         # Average the real and fake loss
@@ -75,7 +72,7 @@ class R1GAN(DCGAN):
         # R1 Penalty calculation needs to enable gradient computation explicitly
         with torch.enable_grad():
             x.requires_grad_(True)
-            logits_real_for_grad = self.discriminator(x)
+            logits_real_for_grad = self.D(x)
             grad_real = torch.autograd.grad(outputs=logits_real_for_grad.sum(), inputs=x, create_graph=True)[0]
             r1_penalty = 0.5 * grad_real.pow(2).view(grad_real.shape[0], -1).sum(1).mean()
 
